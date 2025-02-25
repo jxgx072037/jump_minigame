@@ -33,6 +33,59 @@
 - Node.js 18.0+
 - npm 8.0+
 
+#### Windows安装Node.js
+
+1. **使用安装包（推荐）**：
+   - 访问[Node.js官网](https://nodejs.org/)
+   - 下载并安装LTS（长期支持）版本
+   - 安装过程中保持默认选项即可
+   - 安装完成后，打开命令提示符或PowerShell验证安装：
+     ```
+     node -v
+     npm -v
+     ```
+
+2. **使用NVM for Windows**：
+   - 下载[NVM for Windows](https://github.com/coreybutler/nvm-windows/releases)
+   - 安装NVM
+   - 打开PowerShell或命令提示符，执行：
+     ```
+     nvm install 18.20.0
+     nvm use 18.20.0
+     ```
+
+#### macOS安装Node.js
+
+1. **使用Homebrew（推荐）**：
+   - 安装[Homebrew](https://brew.sh/)（如果尚未安装）：
+     ```bash
+     /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+     ```
+   - 使用Homebrew安装Node.js：
+     ```bash
+     brew install node@18
+     ```
+   - 添加到PATH（如果需要）：
+     ```bash
+     echo 'export PATH="/usr/local/opt/node@18/bin:$PATH"' >> ~/.zshrc
+     source ~/.zshrc
+     ```
+
+2. **使用NVM**：
+   - 安装NVM：
+     ```bash
+     curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.5/install.sh | bash
+     ```
+   - 在终端中安装并使用Node.js 18：
+     ```bash
+     nvm install 18
+     nvm use 18
+     ```
+
+3. **使用安装包**：
+   - 访问[Node.js官网](https://nodejs.org/)
+   - 下载macOS安装包并安装
+
 ### 安装步骤
 
 ```bash
@@ -48,6 +101,16 @@ npm install
 # 启动开发服务器
 npm run dev
 ```
+
+启动开发服务器后，如果一切正常，终端将显示本地访问地址（通常是 `http://localhost:5173/`）。在浏览器中打开这个地址，就可以看到游戏画面并开始游玩了。
+
+如果您想在同一网络下的其他设备（如手机）上访问游戏，可以使用以下命令启动服务器：
+
+```bash
+npm run dev -- --host
+```
+
+然后在其他设备的浏览器中访问终端显示的网络地址。
 
 ### 构建生产版本
 

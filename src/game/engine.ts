@@ -474,9 +474,18 @@ export class GameEngine {
       restartButton.style.border = 'none'
       restartButton.style.borderRadius = '4px'
       
-      // 添加点击事件
-      restartButton.addEventListener('click', () => {
+      // 重启游戏的函数
+      const restartGame = () => {
         window.location.reload()
+      }
+      
+      // 添加点击事件（处理鼠标点击）
+      restartButton.addEventListener('click', restartGame)
+      
+      // 添加触摸事件（处理移动设备）
+      restartButton.addEventListener('touchstart', (e) => {
+        e.preventDefault() // 防止触摸事件被转换为点击事件
+        restartGame()
       })
       
       this.gameOverElement.appendChild(restartButton)

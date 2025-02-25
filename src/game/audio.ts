@@ -1,16 +1,98 @@
 export class AudioManager {
-  private audioContext: AudioContext
-  private masterGain: GainNode
+  private audioContext: AudioContext | null = null
+  private masterGain: GainNode | null = null
+  private audioEnabled: boolean = false
+  private isWechat: boolean = false
 
   constructor() {
-    this.audioContext = new AudioContext()
-    this.masterGain = this.audioContext.createGain()
-    this.masterGain.connect(this.audioContext.destination)
-    this.masterGain.gain.value = 0.3 // 控制整体音量
+    // 检测是否为微信浏览器
+    this.isWechat = /MicroMessenger/i.test(navigator.userAgent)
+    
+    // 尝试初始化音频上下文
+    try {
+      // 使用标准或WebKit前缀的AudioContext
+      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext
+      
+      if (AudioContextClass) {
+        this.audioContext = new AudioContextClass()
+        
+        // 在某些浏览器（尤其是移动浏览器）中，AudioContext可能处于suspended状态
+        if (this.audioContext.state === 'suspended') {
+          this.setupAutoResume()
+        } else {
+          this.audioEnabled = true
+        }
+        
+        this.masterGain = this.audioContext.createGain()
+        this.masterGain.connect(this.audioContext.destination)
+        this.masterGain.gain.value = 0.3 // 控制整体音量
+      }
+    } catch (error) {
+      console.warn('无法初始化Web Audio API:', error)
+      this.audioEnabled = false
+    }
+    
+    // 添加用户交互事件监听器，确保音频在第一次交互时激活
+    this.setupUserInteractionListeners()
+  }
+  
+  // 设置用户交互时自动激活音频上下文
+  private setupUserInteractionListeners(): void {
+    const activateAudio = () => {
+      if (this.audioContext && this.audioContext.state !== 'running') {
+        this.audioContext.resume().then(() => {
+          this.audioEnabled = true
+          console.log('音频上下文已激活')
+          
+          // 在微信中，播放一个静音音频以确保后续的音频可以播放
+          if (this.isWechat) {
+            this.playTestSound()
+          }
+        })
+      }
+      
+      // 激活后移除事件监听器
+      document.removeEventListener('click', activateAudio)
+      document.removeEventListener('touchstart', activateAudio)
+    }
+    
+    document.addEventListener('click', activateAudio)
+    document.addEventListener('touchstart', activateAudio)
+  }
+  
+  // 设置自动恢复音频上下文
+  private setupAutoResume(): void {
+    // 为可能暂停音频上下文的事件添加监听器
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && this.audioContext) {
+        this.audioContext.resume().then(() => {
+          this.audioEnabled = true
+        })
+      }
+    })
+  }
+  
+  // 播放测试声音（用于微信浏览器激活音频）
+  private playTestSound(): void {
+    if (!this.audioContext || !this.audioEnabled) return
+    
+    const osc = this.audioContext.createOscillator()
+    const gain = this.audioContext.createGain()
+    
+    // 设置为无声音
+    gain.gain.value = 0.001
+    
+    osc.connect(gain)
+    gain.connect(this.audioContext.destination)
+    
+    osc.start(0)
+    osc.stop(0.1)
   }
 
   // 生成一个简单的8-bit着陆音效
   public playLandingSound(): void {
+    if (!this.audioContext || !this.masterGain || !this.audioEnabled) return
+    
     const duration = 0.1 // 音效持续时间（秒）
     const startTime = this.audioContext.currentTime
 
@@ -52,6 +134,8 @@ export class AudioManager {
 
   // 生成游戏结束的失败音效
   public playGameOverSound(): void {
+    if (!this.audioContext || !this.masterGain || !this.audioEnabled) return
+    
     const duration = 0.5 // 音效持续时间（秒）
     const startTime = this.audioContext.currentTime
 
