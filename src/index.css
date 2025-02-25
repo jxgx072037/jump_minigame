@@ -1,0 +1,63 @@
+/* 导入像素字体 */
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #FFFFFF;
+}
+
+/* 添加像素字体样式类 */
+.pixel-font {
+  font-family: 'Press Start 2P', monospace;
+  text-shadow: 2px 2px 0 rgba(0, 0, 0, 0.1);
+  letter-spacing: 2px;
+  white-space: pre-line;
+  text-align: center;
+}
+
+.score {
+  font-size: 24px;
+  color: #333;
+  padding: 10px 20px;
+  background-color: rgba(255, 255, 255, 0.9);
+  border-radius: 4px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.game-over {
+  font-size: 32px;
+  color: #FF0000;
+  text-shadow: 3px 3px 0 rgba(0, 0, 0, 0.2);
+  background-color: rgba(255, 255, 255, 0.95);
+  padding: 20px 30px;
+  border-radius: 8px;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #f9f9f9;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}

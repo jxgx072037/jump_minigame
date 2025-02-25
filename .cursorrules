@@ -1,0 +1,161 @@
+# Cursor 开发规则和注意事项
+
+## PowerShell 命令执行问题
+
+### 1. 命令连接符问题
+- ❌ 错误写法：`mkdir jump-game && cd jump-game`
+- ✅ 正确写法：
+  ```powershell
+  mkdir jump-game
+  cd jump-game
+  ```
+- 原因：Windows PowerShell不支持 `&&` 连接符，应该分开执行命令
+
+### 2. 长命令安装依赖问题
+- ❌ 错误写法：`npm install package1 package2 package3 ...`（一次性安装多个包）
+- ✅ 正确写法：
+  ```powershell
+  npm install package1
+  npm install package2
+  npm install package3
+  ```
+- 原因：PowerShell在处理长命令时可能出现缓冲区问题
+
+### 3. 路径问题
+- ❌ 错误写法：使用正斜杠 `/`
+- ✅ 正确写法：使用反斜杠 `\` 或 `${pwd}`
+- 原因：Windows系统路径分隔符为反斜杠
+
+### 4. 环境变量设置
+- ❌ 错误写法：`export VAR=value`
+- ✅ 正确写法：`$env:VAR="value"`
+- 原因：PowerShell使用不同的环境变量语法
+
+## 项目初始化规范
+
+### 1. 创建新项目
+```powershell
+# 1. 创建目录
+mkdir project-name
+cd project-name
+
+# 2. 初始化git
+git init
+
+# 3. 创建.gitignore
+New-Item .gitignore -Type File
+Add-Content .gitignore "node_modules/`ndist/`n.env`n*.log`n.DS_Store"
+
+# 4. 创建基础目录结构
+mkdir src
+mkdir public
+mkdir tests
+```
+
+### 2. 安装依赖
+```powershell
+# 分步安装核心依赖
+npm install three
+npm install @types/three
+npm install @react-three/fiber
+npm install @react-three/drei
+npm install cannon-es
+npm install @react-three/cannon
+npm install zustand
+npm install socket.io-client
+npm install howler
+npm install @types/howler
+
+# 开发依赖
+npm install -D typescript
+npm install -D @typescript-eslint/parser
+npm install -D @typescript-eslint/eslint-plugin
+npm install -D prettier
+```
+
+## VS Code 配置
+
+### 1. 推荐扩展
+- ESLint
+- Prettier
+- TypeScript Vue Plugin
+- Three.js Editor
+- Git Graph
+- Live Server
+- Error Lens
+
+### 2. 工作区设置
+```json
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "typescript.updateImportsOnFileMove.enabled": "always"
+}
+```
+
+## 调试技巧
+
+### 1. 控制台输出
+- 使用 `Write-Host` 替代 `echo`
+- 使用 `$PSVersionTable` 查看PowerShell版本
+- 使用 `Get-Location` 或 `pwd` 查看当前路径
+
+### 2. 错误处理
+- 使用 `$ErrorActionPreference = "Stop"` 在错误时停止执行
+- 使用 `try/catch` 块处理可能的错误
+- 保存错误日志：`Start-Transcript -Path "./logs/$(Get-Date -Format 'yyyy-MM-dd').log"`
+
+## Git 提交规范
+
+### 1. 提交信息格式
+```
+<type>(<scope>): <subject>
+
+<body>
+
+<footer>
+```
+
+### 2. 类型说明
+- feat: 新功能
+- fix: 修复
+- docs: 文档
+- style: 格式
+- refactor: 重构
+- test: 测试
+- chore: 其他
+
+## 项目结构规范
+
+### 1. 目录命名
+- 全小写
+- 使用连字符分隔
+- 清晰表达目录用途
+
+### 2. 文件命名
+- 组件：PascalCase
+- 工具函数：camelCase
+- 类型定义：PascalCase.types.ts
+- 常量：UPPER_CASE
+
+## Three.js 开发规则
+
+### 1. 光源和阴影方向
+- ❌ 错误理解：想让阴影投向X轴负方向，把光源放在X轴负方向
+- ✅ 正确做法：想让阴影投向X轴负方向，应该把光源放在X轴正方向
+- 原因：光源在哪个方向，阴影就会投射到相反的方向
+
+### 2. 阴影设置
+```typescript
+// 启用阴影
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFSoftShadowMap // 使用PCF柔和阴影
+
+// 光源设置
+light.castShadow = true // 允许投射阴影
+
+// 物体设置
+mesh.castShadow = true // 物体投射阴影
+mesh.receiveShadow = true // 物体接收阴影
+```
+``` 
