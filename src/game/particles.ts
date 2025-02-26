@@ -15,7 +15,7 @@ export class ParticleSystem {
   public emit(position: THREE.Vector3): void {
     // 创建粒子几何体
     const geometry = new THREE.BufferGeometry()
-    const particleCount = 40 // 增加粒子数量
+    const particleCount = 100 // 增加粒子数量
 
     // 创建粒子位置数组
     const positions = new Float32Array(particleCount * 3)
@@ -56,7 +56,7 @@ export class ParticleSystem {
       size: 0.25,
       vertexColors: true,
       transparent: true,
-      opacity: 0.85, // 增加不透明度
+      opacity: 1, // 增加不透明度
       blending: THREE.AdditiveBlending
     })
 
@@ -104,7 +104,7 @@ export class ParticleSystem {
       if (system.lifetime > 0) {
         // 使用二次方衰减使透明度变化更自然
         (system.points.material as THREE.PointsMaterial).opacity = 
-          0.85 * (system.lifetime * system.lifetime) // 从0.85开始衰减
+          1 * (system.lifetime * system.lifetime) // 从1开始衰减
       }
     }
   }

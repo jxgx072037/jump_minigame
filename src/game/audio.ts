@@ -3,6 +3,11 @@ export class AudioManager {
   private masterGain: GainNode | null = null
   private audioEnabled: boolean = false
   private isWechat: boolean = false
+  // 添加蓄力音效相关属性
+  private chargingOscillator: OscillatorNode | null = null
+  private chargingGain: GainNode | null = null
+  private isChargingSoundPlaying: boolean = false
+  private maxChargePlayed: boolean = false // 添加标志，避免重复播放最大蓄力音效
 
   constructor() {
     // 检测是否为微信浏览器
@@ -73,7 +78,7 @@ export class AudioManager {
   }
   
   // 播放测试声音（用于微信浏览器激活音频）
-  private playTestSound(): void {
+  public playTestSound(): void {
     if (!this.audioContext || !this.audioEnabled) return
     
     const osc = this.audioContext.createOscillator()
@@ -191,5 +196,196 @@ export class AudioManager {
     triangleOsc.stop(startTime + duration)
     squareOsc.stop(startTime + duration)
     noiseSource.stop(startTime + duration)
+  }
+
+  // 播放开始游戏的欢快8bit音效
+  public playGameStartSound(): void {
+    if (!this.audioContext || !this.masterGain || !this.audioEnabled) return
+    
+    const duration = 0.6 // 音效持续时间（秒）
+    const startTime = this.audioContext.currentTime
+    
+    // 创建主旋律（方波 - 典型的8bit音效）
+    const mainOsc = this.audioContext.createOscillator()
+    mainOsc.type = 'square'
+    
+    // 创建和声（方波 - 高八度）
+    const harmonyOsc = this.audioContext.createOscillator()
+    harmonyOsc.type = 'square'
+    
+    // 创建低音（三角波 - 低八度）
+    const bassOsc = this.audioContext.createOscillator()
+    bassOsc.type = 'triangle'
+    
+    // 设置欢快的上升音阶（C大调）
+    // 主旋律音符序列
+    const mainNotes = [
+      { note: 523.25, time: 0 },     // C5
+      { note: 587.33, time: 0.1 },   // D5
+      { note: 659.25, time: 0.2 },   // E5
+      { note: 698.46, time: 0.3 },   // F5
+      { note: 783.99, time: 0.4 },   // G5
+      { note: 880, time: 0.5 }       // A5
+    ]
+    
+    // 和声音符序列（高八度）
+    const harmonyNotes = [
+      { note: 1046.50, time: 0 },    // C6
+      { note: 1174.66, time: 0.1 },  // D6
+      { note: 1318.51, time: 0.2 },  // E6
+      { note: 1396.91, time: 0.3 },  // F6
+      { note: 1567.98, time: 0.4 },  // G6
+      { note: 1760, time: 0.5 }      // A6
+    ]
+    
+    // 低音音符序列（低八度）
+    const bassNotes = [
+      { note: 261.63, time: 0 },     // C4
+      { note: 293.66, time: 0.1 },   // D4
+      { note: 329.63, time: 0.2 },   // E4
+      { note: 349.23, time: 0.3 },   // F4
+      { note: 392.00, time: 0.4 },   // G4
+      { note: 440, time: 0.5 }       // A4
+    ]
+    
+    // 设置音符序列
+    mainNotes.forEach(note => {
+      mainOsc.frequency.setValueAtTime(note.note, startTime + note.time)
+    })
+    
+    harmonyNotes.forEach(note => {
+      harmonyOsc.frequency.setValueAtTime(note.note, startTime + note.time)
+    })
+    
+    bassNotes.forEach(note => {
+      bassOsc.frequency.setValueAtTime(note.note, startTime + note.time)
+    })
+    
+    // 创建增益节点
+    const mainGain = this.audioContext.createGain()
+    const harmonyGain = this.audioContext.createGain()
+    const bassGain = this.audioContext.createGain()
+    
+    // 设置音量包络
+    mainGain.gain.setValueAtTime(0.3, startTime)
+    mainGain.gain.setValueAtTime(0.3, startTime + duration - 0.1)
+    mainGain.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
+    
+    harmonyGain.gain.setValueAtTime(0.15, startTime)
+    harmonyGain.gain.setValueAtTime(0.15, startTime + duration - 0.1)
+    harmonyGain.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
+    
+    bassGain.gain.setValueAtTime(0.2, startTime)
+    bassGain.gain.setValueAtTime(0.2, startTime + duration - 0.1)
+    bassGain.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
+    
+    // 连接节点
+    mainOsc.connect(mainGain)
+    harmonyOsc.connect(harmonyGain)
+    bassOsc.connect(bassGain)
+    mainGain.connect(this.masterGain)
+    harmonyGain.connect(this.masterGain)
+    bassGain.connect(this.masterGain)
+    
+    // 开始播放并在指定时间停止
+    mainOsc.start(startTime)
+    harmonyOsc.start(startTime)
+    bassOsc.start(startTime)
+    mainOsc.stop(startTime + duration)
+    harmonyOsc.stop(startTime + duration)
+    bassOsc.stop(startTime + duration)
+  }
+
+  // 播放8bit风格的蓄力音效
+  public playChargingSound(power: number = 0): void {
+    if (!this.audioContext || !this.masterGain || !this.audioEnabled) return
+    
+    // 当蓄力达到最大值(0.95以上)且尚未播放最大蓄力音效时，播放提示音
+    if (power >= 0.95 && !this.maxChargePlayed) {
+      this.playMaxChargeSound()
+      this.maxChargePlayed = true
+    } else if (power < 0.95) {
+      // 重置标志，允许再次播放最大蓄力音效
+      this.maxChargePlayed = false
+    }
+    
+    // 如果已经在播放，则只更新频率
+    if (this.isChargingSoundPlaying && this.chargingOscillator) {
+      // 根据力度调整频率，从低音C4 (262Hz)到高音C6 (1047Hz)
+      const baseFreq = 262
+      const maxFreq = 1047
+      const frequency = baseFreq + (maxFreq - baseFreq) * power
+      
+      // 设置新频率
+      this.chargingOscillator.frequency.setValueAtTime(
+        frequency, 
+        this.audioContext.currentTime
+      )
+      return
+    }
+    
+    // 创建振荡器（方波 - 8bit风格）
+    this.chargingOscillator = this.audioContext.createOscillator()
+    this.chargingOscillator.type = 'square'
+    
+    // 初始频率（低音C4）
+    this.chargingOscillator.frequency.setValueAtTime(262, this.audioContext.currentTime)
+    
+    // 创建增益节点
+    this.chargingGain = this.audioContext.createGain()
+    this.chargingGain.gain.setValueAtTime(0.15, this.audioContext.currentTime) // 较低的音量
+    
+    // 连接节点
+    this.chargingOscillator.connect(this.chargingGain)
+    this.chargingGain.connect(this.masterGain)
+    
+    // 开始播放
+    this.chargingOscillator.start()
+    this.isChargingSoundPlaying = true
+  }
+  
+  // 停止蓄力音效
+  public stopChargingSound(): void {
+    if (!this.audioContext || !this.chargingOscillator || !this.chargingGain) return
+    
+    // 创建一个短暂的淡出效果
+    const stopTime = this.audioContext.currentTime + 0.05
+    this.chargingGain.gain.linearRampToValueAtTime(0, stopTime)
+    
+    // 停止振荡器
+    this.chargingOscillator.stop(stopTime)
+    
+    // 重置状态
+    this.isChargingSoundPlaying = false
+    this.chargingOscillator = null
+    this.chargingGain = null
+    this.maxChargePlayed = false // 重置最大蓄力音效标志
+  }
+  
+  // 播放蓄力达到最大时的提示音
+  public playMaxChargeSound(): void {
+    if (!this.audioContext || !this.masterGain || !this.audioEnabled) return
+    
+    const startTime = this.audioContext.currentTime
+    const duration = 0.1 // 短促的提示音
+    
+    // 创建高音提示音（三角波）
+    const triangleOsc = this.audioContext.createOscillator()
+    triangleOsc.type = 'triangle'
+    triangleOsc.frequency.setValueAtTime(1200, startTime) // 高音
+    triangleOsc.frequency.setValueAtTime(1400, startTime + 0.05) // 更高音
+    
+    // 创建增益节点
+    const triangleGain = this.audioContext.createGain()
+    triangleGain.gain.setValueAtTime(0.2, startTime)
+    triangleGain.gain.exponentialRampToValueAtTime(0.01, startTime + duration)
+    
+    // 连接节点
+    triangleOsc.connect(triangleGain)
+    triangleGain.connect(this.masterGain)
+    
+    // 开始播放并在指定时间停止
+    triangleOsc.start(startTime)
+    triangleOsc.stop(startTime + duration)
   }
 } 

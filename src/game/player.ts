@@ -15,9 +15,9 @@ export class Player {
   private jumpTargetPosition: THREE.Vector3 = new THREE.Vector3()
   private jumpProgress: number = 0
   private jumpPower: number = 0
-  private readonly JUMP_SPEED: number = 15 // 固定跳跃速度（单位：米/秒）
+  private readonly JUMP_SPEED: number = 7.5 // 固定跳跃速度（单位：米/秒）
   private jumpDuration: number = 0 // 跳跃时长将根据距离动态计算
-  private readonly JUMP_HEIGHT_RATIO: number = 0.225 // 跳跃高度与距离的比例
+  private readonly JUMP_HEIGHT_RATIO: number = 5 // 跳跃高度与距离的比例 (增加高度使曲线更像半圆)
   private onJumpComplete?: (success: boolean) => void
   private currentPlatform?: Platform
   private boundingBox: THREE.Box3
@@ -27,6 +27,15 @@ export class Player {
   private fallProgress: number = 0
   private fallDuration: number = 0.5 // 倒下动画持续时间（秒）
   private fallDirection: THREE.Vector3 = new THREE.Vector3()
+  private fallStartY: number = 0
+  
+  // 添加翻转动画相关属性
+  private isFlipping: boolean = false
+  private flipProgress: number = 0
+  private flipStartTime: number = 0
+  private flipDuration: number = 1 // 翻转动画持续时间（秒）
+  private flipAxis: THREE.Vector3 = new THREE.Vector3(1, 0, 0) // 默认绕X轴翻转
+  private initialRotation: THREE.Quaternion = new THREE.Quaternion()
 
   constructor() {
     this.mesh = new THREE.Group()
@@ -121,22 +130,40 @@ export class Player {
         this.isFalling = false
       }
       
-      // 修改为135度的倾倒角度（3π/4）而不是90度
-      const angle = (Math.PI * 3 / 4) * this.fallProgress
+      // 设置精确的90度旋转角度
+      const angle = (Math.PI / 2) * this.fallProgress
       
-      // 根据跳跃方向设置旋转轴（修改为相反方向）
+      // 根据失败方向设置旋转轴
+      // 计算垂直于失败方向的旋转轴
       const rotationAxis = new THREE.Vector3(this.fallDirection.z, 0, -this.fallDirection.x)
       rotationAxis.normalize()
       
       // 应用旋转
       this.mesh.quaternion.setFromAxisAngle(rotationAxis, angle)
+      
+      // 计算高度下降
+      // 从平台高度1逐渐降低到地面高度0
+      const currentY = Math.max(0, this.fallStartY * (1 - this.fallProgress))
+      this.mesh.position.y = currentY
     }
 
     if (this.isJumping) {
       this.jumpProgress += deltaTime / this.jumpDuration
+      
+      // 每隔一段时间记录跳跃进度
+      if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
+        console.log('[DEBUG] 跳跃进度:', this.jumpProgress.toFixed(2));
+      }
+      
       if (this.jumpProgress >= 1) {
         this.jumpProgress = 1
         this.isJumping = false
+        this.isFlipping = false // 确保翻转动画结束
+        console.log('[DEBUG] 跳跃完成');
+        
+        // 重置旋转，确保棋子回到正常姿态
+        this.mesh.rotation.x = 0;
+        this.mesh.rotation.z = 0;
         
         // 获取目标位置的XZ坐标
         const targetPos = this.jumpTargetPosition.clone()
@@ -145,9 +172,11 @@ export class Player {
         
         // 将玩家移动到目标位置
         this.setPosition(targetPos.x, targetPos.y, targetPos.z)
+        console.log('[DEBUG] 设置最终位置:', targetPos);
         
         // 获取最新的玩家位置（可能与目标位置略有不同）
         const playerPos = this.getPosition()
+        console.log('[DEBUG] 实际最终位置:', playerPos);
         
         // 检查是否在任何平台上
         let isOnAnyPlatform = false
@@ -167,7 +196,7 @@ export class Player {
           // 如果在任何平台范围内，保持y=1
           // 跳跃成功
           if (this.onJumpComplete) {
-            console.log('跳跃判定: 成功')
+            console.log('[DEBUG] 跳跃判定: 成功')
             this.onJumpComplete(true)
           }
         } else {
@@ -175,7 +204,7 @@ export class Player {
           this.setPosition(playerPos.x, 0, playerPos.z)
           // 跳跃失败
           if (this.onJumpComplete) {
-            console.log('跳跃判定: 失败')
+            console.log('[DEBUG] 跳跃判定: 失败')
             this.onJumpComplete(false)
           }
         }
@@ -187,21 +216,88 @@ export class Player {
       const p0 = this.jumpStartPosition
       const p1 = this.jumpTargetPosition
       const distance = p1.distanceTo(p0)
-      const height = distance * this.JUMP_HEIGHT_RATIO * this.jumpPower
-
+      const height = 4 //跳跃高度固定为3
+      
       // 水平线性插值
       const currentX = p0.x + (p1.x - p0.x) * t
       const currentZ = p0.z + (p1.z - p0.z) * t
       
-      // 垂直抛物线
-      const currentY = height * 4 * (t - t * t) + 1 // 抛物线从y=1开始
+      // 修改垂直抛物线公式，使其更接近半圆形
+      // 使用正弦函数来创建更接近半圆的曲线
+      const currentY = 1 + height * Math.sin(Math.PI * t)
+      
+      // 每隔一段时间记录位置
+      if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
+        console.log('[DEBUG] 跳跃轨迹:', {
+          progress: t.toFixed(2),
+          x: currentX.toFixed(2),
+          y: currentY.toFixed(2),
+          z: currentZ.toFixed(2),
+          height: height.toFixed(2)
+        });
+      }
 
       this.mesh.position.set(currentX, currentY, currentZ)
 
+      // 计算移动方向
+      const moveDirection = new THREE.Vector3(p1.x - p0.x, 0, p1.z - p0.z).normalize();
+      
       // 计算朝向
       if (t < 1) {
         const direction = new THREE.Vector2(p1.x - p0.x, p1.z - p0.z).angle()
         this.mesh.rotation.y = direction
+      }
+      
+      // 修改翻转动画，从跳跃开始就启动，在落地时正好完成一周
+      // 翻转进度与跳跃进度一致，从0到1
+      const flipT = t;
+      
+      // 执行360度翻转
+      const flipAngle = flipT * Math.PI * 2; // 0到2π（360度）
+      
+      // 修改翻转轴，使其垂直于移动方向，但始终保持前空翻效果
+      // 确定主要移动方向（X轴或Z轴）
+      const absX = Math.abs(moveDirection.x);
+      const absZ = Math.abs(moveDirection.z);
+      
+      // 创建一个四元数来存储旋转
+      const flipQuaternion = new THREE.Quaternion();
+      
+      // 保存原始Y轴旋转（朝向）
+      const originalRotationY = this.mesh.rotation.y;
+      
+      // 根据主要移动方向确定翻转轴
+      if (absX > absZ) {
+        // 主要沿X轴移动，绕Z轴的垂直轴翻转（即绕Y轴的垂直轴）
+        // 如果是向-X方向移动，需要反向翻转
+        const rotationAxis = new THREE.Vector3(0, 0, Math.sign(moveDirection.x));
+        flipQuaternion.setFromAxisAngle(rotationAxis, flipAngle);
+        
+        if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
+          console.log('[DEBUG] X轴方向前空翻, 方向:', Math.sign(moveDirection.x) > 0 ? '正X' : '负X');
+        }
+      } else {
+        // 主要沿Z轴移动，绕X轴的垂直轴翻转
+        // 如果是向-Z方向移动，需要反向翻转
+        const rotationAxis = new THREE.Vector3(Math.sign(moveDirection.z), 0, 0);
+        flipQuaternion.setFromAxisAngle(rotationAxis, flipAngle);
+        
+        if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
+          console.log('[DEBUG] Z轴方向前空翻, 方向:', Math.sign(moveDirection.z) > 0 ? '正Z' : '负Z');
+        }
+      }
+      
+      // 应用翻转旋转
+      this.mesh.quaternion.copy(flipQuaternion);
+      
+      // 恢复原始Y轴旋转（朝向）
+      this.mesh.rotation.y = originalRotationY;
+      
+      if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
+        console.log('[DEBUG] 执行翻转:', {
+          progress: flipT.toFixed(2),
+          angle: (flipAngle * 180 / Math.PI).toFixed(2) + '度'
+        });
       }
 
       // 更新碰撞边界
@@ -258,6 +354,8 @@ export class Player {
   ): void {
     if (this.isJumping) return
     
+    console.log('[DEBUG] Player.jump 被调用，力度:', power);
+    
     this.isCharging = false
     this.isJumping = true
     this.jumpProgress = 0
@@ -269,10 +367,22 @@ export class Player {
     this.jumpTargetPosition.copy(targetPosition)
     
     const jumpDistance = this.jumpStartPosition.distanceTo(this.jumpTargetPosition)
-    this.jumpDuration = jumpDistance / this.JUMP_SPEED
+    this.jumpDuration = 0.6
+    
+    // 重置翻转状态
+    this.isFlipping = false
+    this.flipProgress = 0
+    
+    console.log('[DEBUG] 跳跃参数:', {
+      jumpPower: this.jumpPower,
+      jumpStartPosition: this.jumpStartPosition,
+      jumpTargetPosition: this.jumpTargetPosition,
+      jumpDistance,
+      jumpDuration: this.jumpDuration,
+      jumpSpeed: this.JUMP_SPEED
+    });
     
     this.scale(1)
-    
   }
 
   // 在跳跃完成时打印位置信息
@@ -322,8 +432,13 @@ export class Player {
     this.isFalling = true
     this.fallProgress = 0
     this.fallDirection = direction.clone().normalize()
+    // 保存起始高度，用于计算下落高度
+    this.fallStartY = this.mesh.position.y
     
-    // 重置之前的旋转
+    // 延长倒下动画持续时间，使其更加平滑
+    this.fallDuration = 0.8
+    
+    // 重置之前的旋转，保留Y轴旋转角度（朝向）
     this.mesh.rotation.set(0, this.mesh.rotation.y, 0)
   }
 } 

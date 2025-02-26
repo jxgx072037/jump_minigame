@@ -1,20 +1,28 @@
 import * as THREE from 'three'
-import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { Platform } from './platform'
 import { Player } from './player'
 import { ParticleSystem } from './particles'
 import { AudioManager } from './audio'
 
+// 静态属性声明
 export class GameEngine {
-  private scene: THREE.Scene
-  private camera: THREE.PerspectiveCamera
-  private renderer: THREE.WebGLRenderer
-  private controls: OrbitControls
+  // 使用全局变量保存实例，确保在严格模式下也能保持单例状态
+  private static instance: GameEngine | null = null;
+  private static currentContainer: HTMLElement | null = null;
+  private static GLOBAL_GAME_STARTED: boolean = false;
+  // 添加一个标志，表示实例是否已被销毁
+  private static instanceDestroyed: boolean = false;
+
+  private scene!: THREE.Scene
+  private camera!: THREE.PerspectiveCamera
+  private renderer!: THREE.WebGLRenderer
+  private controls!: OrbitControls
   private platforms: Platform[] = []
   private player!: Player // 使用!操作符表明该属性会在构造函数中被初始化
   private score: number = 0
-  private scoreElement: HTMLDivElement
-  private clock: THREE.Clock
+  private scoreElement!: HTMLDivElement
+  private clock!: THREE.Clock
   private isPressing: boolean = false
   private pressStartTime: number = 0
   private readonly MAX_PRESS_TIME: number = 2000 // 最大按压时间（毫秒）
@@ -22,18 +30,29 @@ export class GameEngine {
 
   // 相机相关属性
   private readonly CAMERA_SPEED: number = 15 // 与棋子跳跃速度相同
-  private cameraTargetPosition: THREE.Vector3
-  private cameraTargetLookAt: THREE.Vector3
+  private cameraTargetPosition!: THREE.Vector3
+  private cameraTargetLookAt!: THREE.Vector3
   private cameraMoving: boolean = false
-  private cameraStartPosition: THREE.Vector3
-  private cameraStartLookAt: THREE.Vector3
+  private cameraStartPosition!: THREE.Vector3
+  private cameraStartLookAt!: THREE.Vector3
   private cameraMoveProgress: number = 0
   private cameraMoveDistance: number = 0
 
   // 添加游戏结束相关属性
-  private gameOverElement: HTMLDivElement
+  private gameOverElement!: HTMLDivElement
   private isGameOver: boolean = false
-  private startMessageElement: HTMLDivElement // 添加开始提示元素
+  private startMessageElement!: HTMLDivElement // 添加开始提示元素
+
+  // 添加游戏模式选择相关属性
+  private gameModeSelectElement!: HTMLDivElement
+  private basicModeButton!: HTMLButtonElement
+  private evolveModeButton!: HTMLDivElement
+  private isGameStarted: boolean = false
+  
+  // 添加进化模式相关属性
+  private evolveModeElement!: HTMLDivElement
+  private evolveInputElement!: HTMLInputElement
+  private evolveSubmitButton!: HTMLButtonElement
 
   private currentPlatformIndex: number = 0
   private targetPlatformIndex: number = 1
@@ -50,12 +69,42 @@ export class GameEngine {
   private mainLight!: THREE.DirectionalLight
 
   // 添加粒子系统和音效
-  private particleSystem: ParticleSystem
-  private audioManager: AudioManager
+  private particleSystem!: ParticleSystem
+  private audioManager!: AudioManager
 
   private renderAxes: () => void = () => {}
+  
+  // 添加唯一ID用于调试
+  private instanceId!: string
 
-  constructor(container: HTMLElement) {
+  // 修改构造函数为私有
+  private constructor(container: HTMLElement) {
+    // 如果已经存在实例且未被销毁，直接返回该实例
+    if (GameEngine.instance && !GameEngine.instanceDestroyed) {
+      console.log(`[DEBUG] 返回已存在的GameEngine实例 ID: ${GameEngine.instance.instanceId}`);
+      return GameEngine.instance;
+    }
+
+    // 生成实例ID用于调试
+    this.instanceId = Math.random().toString(36).substring(2, 8);
+    console.log(`[DEBUG] 创建新的GameEngine实例 ID: ${this.instanceId}`);
+    
+    // 从全局变量获取游戏状态
+    this.isGameStarted = GameEngine.GLOBAL_GAME_STARTED;
+    console.log(`[DEBUG] 初始化时从全局变量获取游戏状态: ${this.isGameStarted}`);
+    
+    // 如果是重用被销毁的实例，需要重新初始化所有属性
+    if (GameEngine.instanceDestroyed) {
+      console.log(`[DEBUG] 重新初始化被销毁的实例 ID: ${this.instanceId}`);
+      GameEngine.instanceDestroyed = false;
+    }
+    
+    // 确保跳跃相关属性被正确初始化
+    this.isPressing = false;
+    this.pressStartTime = 0;
+    // MAX_PRESS_TIME和BASE_JUMP_POWER已经在类属性中定义，不需要在这里重新赋值
+    console.log(`[DEBUG] 跳跃相关属性初始化: MAX_PRESS_TIME=${this.MAX_PRESS_TIME}, BASE_JUMP_POWER=${this.BASE_JUMP_POWER}`);
+    
     this.clock = new THREE.Clock()
     
     // 创建场景
@@ -126,6 +175,181 @@ export class GameEngine {
     this.gameOverElement.style.display = 'none'
     container.appendChild(this.gameOverElement)
 
+    // 创建游戏模式选择界面
+    this.gameModeSelectElement = document.createElement('div')
+    this.gameModeSelectElement.style.position = 'absolute'
+    this.gameModeSelectElement.style.width = '100%'
+    this.gameModeSelectElement.style.height = '100%'
+    this.gameModeSelectElement.style.top = '0'
+    this.gameModeSelectElement.style.left = '0'
+    this.gameModeSelectElement.style.display = 'flex'
+    this.gameModeSelectElement.style.flexDirection = 'column'
+    this.gameModeSelectElement.style.justifyContent = 'center'
+    this.gameModeSelectElement.style.alignItems = 'center'
+    this.gameModeSelectElement.style.background = `url('game.png')`
+    this.gameModeSelectElement.style.backgroundSize = 'cover'
+    this.gameModeSelectElement.style.backgroundPosition = 'center'
+    this.gameModeSelectElement.style.zIndex = '1000'
+    container.appendChild(this.gameModeSelectElement)
+    
+    // 根据全局游戏状态决定是否显示选择界面
+    if (this.isGameStarted) {
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 游戏已开始，隐藏选择界面`);
+      this.gameModeSelectElement.style.display = 'none';
+      this.scoreElement.style.display = 'block';
+    }
+    
+    // 添加标题
+    const titleElement = document.createElement('h1')
+    titleElement.textContent = '欢迎来到跳一跳'
+    titleElement.style.color = 'white'
+    titleElement.style.fontSize = '3.5rem'
+    titleElement.style.fontWeight = 'bold'
+    titleElement.style.textShadow = '2px 2px 10px rgba(0, 0, 0, 0.8)'
+    titleElement.style.marginBottom = '1rem'
+    titleElement.style.letterSpacing = '3px'
+    this.gameModeSelectElement.appendChild(titleElement)
+    
+    // 添加副标题
+    const subtitleElement = document.createElement('p')
+    subtitleElement.textContent = '请选择游戏模式：'
+    subtitleElement.style.color = 'white'
+    subtitleElement.style.fontSize = '1.5rem'
+    subtitleElement.style.marginBottom = '2rem'
+    subtitleElement.style.textShadow = '1px 1px 5px rgba(0, 0, 0, 0.7)'
+    this.gameModeSelectElement.appendChild(subtitleElement)
+    
+    // 创建按钮容器
+    const buttonContainer = document.createElement('div')
+    buttonContainer.style.display = 'flex'
+    buttonContainer.style.flexDirection = 'column'
+    buttonContainer.style.alignItems = 'center'
+    buttonContainer.style.gap = '1.5rem'
+    this.gameModeSelectElement.appendChild(buttonContainer)
+    
+    // 添加基础模式按钮（带图标）
+    this.basicModeButton = document.createElement('button')
+    this.basicModeButton.style.display = 'flex'
+    this.basicModeButton.style.alignItems = 'center'
+    this.basicModeButton.style.justifyContent = 'center'
+    this.basicModeButton.style.padding = '0.8rem 2rem'
+    this.basicModeButton.style.backgroundColor = 'white'
+    this.basicModeButton.style.color = 'rgba(0, 0, 0, 0.8)'
+    this.basicModeButton.style.border = 'none'
+    this.basicModeButton.style.borderRadius = '2rem'
+    this.basicModeButton.style.fontSize = '1.1rem'
+    this.basicModeButton.style.fontWeight = 'bold'
+    this.basicModeButton.style.cursor = 'pointer'
+    this.basicModeButton.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.3)'
+    this.basicModeButton.style.transition = 'all 0.2s ease'
+    this.basicModeButton.onmouseover = () => {
+      this.basicModeButton.style.transform = 'scale(1.05)'
+      this.basicModeButton.style.boxShadow = '0 6px 15px rgba(0, 0, 0, 0.35)'
+    }
+    this.basicModeButton.onmouseout = () => {
+      this.basicModeButton.style.transform = 'scale(1)'
+      this.basicModeButton.style.boxShadow = '0 4px 10px rgba(0, 0, 0, 0.3)'
+    }
+    
+    // 添加播放图标（Font Awesome样式）
+    const playIcon = document.createElement('div')
+    playIcon.innerHTML = '▶'
+    playIcon.style.color = '#4CAF50' // 绿色
+    playIcon.style.fontSize = '1.2rem'
+    playIcon.style.marginRight = '0.5rem'
+    this.basicModeButton.appendChild(playIcon)
+    
+    // 添加文本
+    const buttonText = document.createElement('span')
+    buttonText.textContent = '开始游戏'
+    this.basicModeButton.appendChild(buttonText)
+    
+    buttonContainer.appendChild(this.basicModeButton)
+    
+    // 添加进化模式按钮（多人游戏链接样式）
+    this.evolveModeButton = document.createElement('div')
+    this.evolveModeButton.textContent = '进化模式'
+    this.evolveModeButton.style.marginTop = '1.5rem'
+    this.evolveModeButton.style.color = 'rgba(255, 255, 255, 0.9)'
+    this.evolveModeButton.style.fontSize = '1.1rem'
+    this.evolveModeButton.style.cursor = 'pointer'
+    this.evolveModeButton.style.position = 'relative'
+    this.evolveModeButton.style.paddingBottom = '2px'
+    this.evolveModeButton.style.transition = 'all 0.3s ease'
+    
+    // 添加下划线动画效果
+    const underlineEffect = () => {
+      this.evolveModeButton.style.display = 'inline-block'
+      
+      // 添加伪元素样式
+      this.evolveModeButton.style.overflow = 'hidden'
+      
+      // 创建下划线元素
+      const underline = document.createElement('div')
+      underline.style.position = 'absolute'
+      underline.style.bottom = '0'
+      underline.style.left = '0'
+      underline.style.width = '0'
+      underline.style.height = '1px'
+      underline.style.backgroundColor = 'white'
+      underline.style.transition = 'width 0.3s ease'
+      this.evolveModeButton.appendChild(underline)
+      
+      // 鼠标悬停效果
+      this.evolveModeButton.onmouseover = () => {
+        underline.style.width = '100%'
+        this.evolveModeButton.style.color = 'white'
+      }
+      
+      this.evolveModeButton.onmouseout = () => {
+        underline.style.width = '0'
+        this.evolveModeButton.style.color = 'rgba(255, 255, 255, 0.9)'
+      }
+    }
+    
+    underlineEffect()
+    buttonContainer.appendChild(this.evolveModeButton)
+    
+    // 添加按钮点击事件
+    // 使用箭头函数确保正确的this上下文
+    this.basicModeButton.addEventListener('click', (e) => {
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 基础模式按钮被点击`, e);
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 点击时的游戏状态:`, { isGameStarted: this.isGameStarted, globalState: GameEngine.GLOBAL_GAME_STARTED });
+      
+      // 如果游戏已经开始，避免重复处理
+      if (this.isGameStarted || GameEngine.GLOBAL_GAME_STARTED) {
+        console.log(`[DEBUG] 实例 ${this.instanceId}: 游戏已经开始，忽略重复点击`);
+        return;
+      }
+      
+      // 播放开始游戏的欢快音效
+      if (this.audioManager) {
+        this.audioManager.playGameStartSound();
+      }
+      
+      this.startBasicMode();
+      e.stopPropagation(); // 阻止事件冒泡
+    });
+    
+    this.evolveModeButton.addEventListener('click', (e) => {
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 进化模式按钮被点击`, e);
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 点击时的游戏状态:`, { isGameStarted: this.isGameStarted, globalState: GameEngine.GLOBAL_GAME_STARTED });
+      
+      // 如果游戏已经开始，避免重复处理
+      if (this.isGameStarted || GameEngine.GLOBAL_GAME_STARTED) {
+        console.log(`[DEBUG] 实例 ${this.instanceId}: 游戏已经开始，忽略重复点击`);
+        return;
+      }
+      
+      // 播放开始游戏的欢快音效
+      if (this.audioManager) {
+        this.audioManager.playGameStartSound();
+      }
+      
+      this.showEvolveMode();
+      e.stopPropagation(); // 阻止事件冒泡
+    });
+    
     // 添加光源
     this.setupLights()
 
@@ -147,22 +371,129 @@ export class GameEngine {
     // 开始动画循环
     this.animate()
 
-    // 显示开始提示
-    this.showStartMessage()
+    // 隐藏分数元素，直到游戏开始
+    this.scoreElement.style.display = 'none'
 
     // 添加窗口大小变化监听
     window.addEventListener('resize', this.onWindowResize.bind(this))
 
-    // 根据设备类型选择事件监听器
-    if ('ontouchstart' in window) {
-      // 触摸设备
-      container.addEventListener('touchstart', this.onPressStart.bind(this))
-      container.addEventListener('touchend', this.onPressEnd.bind(this))
-    } else {
-      // 鼠标设备
-      container.addEventListener('mousedown', this.onPressStart.bind(this))
-      container.addEventListener('mouseup', this.onPressEnd.bind(this))
+    // 如果游戏已经开始，添加交互事件监听器
+    if (this.isGameStarted) {
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 初始化时游戏已开始，添加事件监听器`);
+      this.addEventListeners();
     }
+    
+    // 在适当的时机检查全局状态
+    setInterval(() => {
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 定时状态检查:`, { 
+        instanceGameStarted: this.isGameStarted,
+        globalGameStarted: GameEngine.GLOBAL_GAME_STARTED,
+        isGameOver: this.isGameOver
+      });
+    }, 3000);
+
+    // 保存实例
+    GameEngine.instance = this;
+  }
+
+  // 修改静态方法获取实例
+  public static getInstance(container: HTMLElement): GameEngine {
+    console.log('[DEBUG] getInstance 被调用，当前状态:', {
+      hasInstance: !!GameEngine.instance,
+      instanceDestroyed: GameEngine.instanceDestroyed,
+      container: container.id || '无ID'
+    });
+    
+    // 如果实例存在，但容器不同，需要重新附加
+    if (GameEngine.instance && GameEngine.currentContainer !== container) {
+      console.log('[DEBUG] 重新附加现有实例到新容器');
+      const renderer = GameEngine.instance.getRenderer();
+      if (GameEngine.currentContainer) {
+        try {
+          GameEngine.currentContainer.removeChild(renderer.domElement);
+        } catch (error) {
+          console.warn('[WARN] 移除旧容器中的渲染器元素时出错:', error);
+        }
+      }
+      container.appendChild(renderer.domElement);
+      GameEngine.currentContainer = container;
+      GameEngine.instance.onWindowResize();
+      return GameEngine.instance;
+    }
+    
+    // 如果实例不存在或已被销毁，创建新实例
+    if (!GameEngine.instance || GameEngine.instanceDestroyed) {
+      console.log('[DEBUG] 创建新的GameEngine实例');
+      GameEngine.instance = new GameEngine(container);
+      GameEngine.currentContainer = container;
+      GameEngine.instanceDestroyed = false; // 重置销毁标志
+    } else {
+      console.log(`[DEBUG] 返回已存在的GameEngine实例 ID: ${GameEngine.instance.instanceId}`);
+    }
+    
+    return GameEngine.instance;
+  }
+
+  // 添加静态方法销毁实例
+  public static destroyInstance(): void {
+    if (GameEngine.instance) {
+      console.log('[DEBUG] destroyInstance 被调用');
+      
+      // 先调用清理方法
+      GameEngine.instance.cleanup();
+      
+      // 安全地移除渲染器的 DOM 元素
+      if (GameEngine.currentContainer && GameEngine.instance.renderer) {
+        const rendererElement = GameEngine.instance.renderer.domElement;
+        if (rendererElement.parentElement === GameEngine.currentContainer) {
+          try {
+            GameEngine.currentContainer.removeChild(rendererElement);
+            console.log('[DEBUG] 成功移除渲染器 DOM 元素');
+          } catch (error) {
+            console.warn('[WARN] 移除渲染器 DOM 元素时出错:', error);
+          }
+        }
+      }
+      
+      // 设置销毁标志，但不立即清除实例引用
+      GameEngine.instanceDestroyed = true;
+      
+      // 重置容器引用和游戏状态
+      GameEngine.currentContainer = null;
+      GameEngine.GLOBAL_GAME_STARTED = false;
+      
+      console.log('[DEBUG] GameEngine 实例已标记为销毁');
+    }
+  }
+
+  // 添加清理方法
+  private cleanup(): void {
+    console.log('[DEBUG] cleanup 被调用');
+    
+    // 移除事件监听器
+    this.removeEventListeners();
+    
+    // 移除窗口大小变化监听
+    window.removeEventListener('resize', this.onWindowResize.bind(this));
+    
+    // 停止动画循环 - 修复类型错误
+    const animationId = requestAnimationFrame(this.animate.bind(this));
+    cancelAnimationFrame(animationId);
+    
+    // 清理场景
+    while(this.scene.children.length > 0) { 
+      this.scene.remove(this.scene.children[0]);
+    }
+    
+    // 清理渲染器
+    if (this.renderer) {
+      this.renderer.dispose();
+    }
+    
+    // 重置游戏状态
+    this.isGameStarted = false;
+    this.isGameOver = false;
+    this.score = 0;
   }
 
   private setupLights(): void {
@@ -214,9 +545,12 @@ export class GameEngine {
     // 设置坐标轴颜色
     const materials = axesHelper.material as THREE.Material[]
     if (Array.isArray(materials)) {
-      materials[0].color.set(0xff0000) // X轴 - 红色
-      materials[1].color.set(0x00ff00) // Y轴 - 绿色
-      materials[2].color.set(0x0000ff) // Z轴 - 蓝色
+      // 修复类型错误，使用 THREE.Color 对象
+      if ((materials[0] as THREE.LineBasicMaterial).color) {
+        (materials[0] as THREE.LineBasicMaterial).color = new THREE.Color(0xff0000); // X轴 - 红色
+        (materials[1] as THREE.LineBasicMaterial).color = new THREE.Color(0x00ff00); // Y轴 - 绿色
+        (materials[2] as THREE.LineBasicMaterial).color = new THREE.Color(0x0000ff); // Z轴 - 蓝色
+      }
     }
     axesScene.add(axesHelper)
     
@@ -337,8 +671,13 @@ export class GameEngine {
     // 如果正在按压，更新蓄力动画
     if (this.isPressing) {
       const pressDuration = Date.now() - this.pressStartTime
-      const power = Math.min(pressDuration * this.BASE_JUMP_POWER, 1)
+      // 修正计算方式，使用与onPressEnd相同的计算公式
+      const power = Math.min(pressDuration / this.MAX_PRESS_TIME, 1)
+      console.log('[DEBUG] 蓄力动画更新: 按压时间=', pressDuration, 'ms, 力度=', power);
       this.player.updateCharging(power)
+      
+      // 更新蓄力音效频率
+      this.audioManager.playChargingSound(power)
     }
     
     // 更新相机位置
@@ -413,8 +752,8 @@ export class GameEngine {
     // 随机决定在X轴负方向还是Z轴负方向生成（50%概率）
     const isXDirection = Math.random() < 0.5
     
-    // 固定距离为4个单位
-    const distance = 4
+    // 随机生成4-7之间的距离
+    const distance = Math.floor(Math.random() * (7 - 4 + 1)) + 4
     
     // 计算新平台的位置
     const newPosition = {
@@ -446,6 +785,9 @@ export class GameEngine {
     // 立即设置游戏结束状态和停止所有操作
     this.isGameOver = true
     this.isPressing = false
+    
+    // 移除所有事件监听器，确保完全停止交互
+    this.removeEventListeners()
     
     // 立即播放失败音效
     this.audioManager.playGameOverSound()
@@ -492,27 +834,91 @@ export class GameEngine {
     }, 1500)
   }
 
-  private onPressStart(event: MouseEvent | TouchEvent): void {
-    event.preventDefault()
-    if (this.isPressing || this.isGameOver) return // 游戏结束时不允许操作
+  // 移除所有事件监听器，确保游戏失败后不响应任何交互
+  private removeEventListeners(): void {
+    console.log('[DEBUG] removeEventListeners 被调用');
     
-    this.isPressing = true
-    this.pressStartTime = Date.now()
-    this.player.startCharging()
+    const container = this.renderer?.domElement?.parentElement;
+    if (!container) {
+      console.log('[DEBUG] 找不到容器元素或渲染器已被清理，跳过移除事件监听器');
+      return;
+    }
+
+    try {
+      container.removeEventListener('mousedown', this.onPressStart.bind(this));
+      container.removeEventListener('mouseup', this.onPressEnd.bind(this));
+      container.removeEventListener('touchstart', this.onPressStart.bind(this));
+      container.removeEventListener('touchend', this.onPressEnd.bind(this));
+      console.log('[DEBUG] 事件监听器已成功移除');
+    } catch (error) {
+      console.warn('[WARN] 移除事件监听器时出错:', error);
+    }
+  }
+
+  private onPressStart(event: MouseEvent | TouchEvent): void {
+    console.log('[DEBUG] onPressStart 被调用，事件类型:', event.type);
+    console.log('[DEBUG] 当前游戏状态:', { 
+      isGameStarted: this.isGameStarted, 
+      isGameOver: this.isGameOver, 
+      isPressing: this.isPressing,
+      cameraMoving: this.cameraMoving
+    });
+    
+    // 只有在游戏开始、非游戏结束状态，且相机不在移动时才处理
+    if (!this.isGameStarted || this.isGameOver || this.cameraMoving) {
+      console.log('[DEBUG] 按压被忽略，游戏状态不满足条件');
+      return;
+    }
+    
+    // 开始按压
+    this.isPressing = true;
+    this.pressStartTime = Date.now();
+    console.log('[DEBUG] 开始按压，记录时间:', this.pressStartTime);
+    console.log('[DEBUG] MAX_PRESS_TIME:', this.MAX_PRESS_TIME, 'ms');
+    console.log('[DEBUG] BASE_JUMP_POWER:', this.BASE_JUMP_POWER);
+    
+    // 让玩家开始充能（缩放效果）
+    this.player.startCharging();
+    
+    // 播放蓄力音效
+    this.audioManager.playChargingSound(0);
+    
+    console.log('[DEBUG] 玩家开始充能');
   }
 
   private onPressEnd(event: MouseEvent | TouchEvent): void {
-    event.preventDefault() // 阻止默认行为
-    if (!this.isPressing || this.isGameOver) return // 游戏结束时不允许操作
-
-    const pressDuration = Math.min(Date.now() - this.pressStartTime, this.MAX_PRESS_TIME)
-    this.isPressing = false
+    console.log('[DEBUG] onPressEnd 被调用，事件类型:', event.type);
+    console.log('[DEBUG] 当前游戏状态:', { 
+      isGameStarted: this.isGameStarted, 
+      isGameOver: this.isGameOver, 
+      isPressing: this.isPressing,
+      cameraMoving: this.cameraMoving
+    });
     
-    // 计算跳跃力度（0-1之间）
-    const power = pressDuration * this.BASE_JUMP_POWER
+    // 只有在按压状态下才处理
+    if (!this.isPressing) {
+      console.log('[DEBUG] 释放被忽略，当前不在按压状态');
+      return;
+    }
     
-    // 触发跳跃
-    this.jump(power)
+    // 计算按压时间
+    const pressDuration = Date.now() - this.pressStartTime;
+    console.log('[DEBUG] 按压时间:', pressDuration, 'ms');
+    console.log('[DEBUG] MAX_PRESS_TIME:', this.MAX_PRESS_TIME, 'ms');
+    
+    // 计算跳跃力度（0-1范围内）
+    const power = Math.min(pressDuration / this.MAX_PRESS_TIME, 1);
+    console.log('[DEBUG] 计算的跳跃力度:', power, '(pressDuration / MAX_PRESS_TIME =', pressDuration, '/', this.MAX_PRESS_TIME, '=', pressDuration / this.MAX_PRESS_TIME, ')');
+    
+    // 停止蓄力音效
+    this.audioManager.stopChargingSound();
+    
+    // 重置按压状态
+    this.isPressing = false;
+    
+    // 执行跳跃
+    this.jump(power);
+    console.log('[DEBUG] 执行跳跃，力度:', power);
   }
 
   private jump(power: number): void {
@@ -528,30 +934,61 @@ export class GameEngine {
     // 计算平台之间的相对位置
     const deltaX = targetPlatformPos.x - currentPlatformPos.x
     const deltaZ = targetPlatformPos.z - currentPlatformPos.z
+    console.log('[DEBUG] 平台相对位置:', { deltaX, deltaZ });
 
     // 确定跳跃方向
     const direction = new THREE.Vector3()
     if (Math.abs(deltaX) > Math.abs(deltaZ)) {
       direction.set(Math.sign(deltaX), 0, 0)
+      console.log('[DEBUG] 跳跃方向: X轴', Math.sign(deltaX) > 0 ? '正方向' : '负方向');
     } else {
       direction.set(0, 0, Math.sign(deltaZ))
+      console.log('[DEBUG] 跳跃方向: Z轴', Math.sign(deltaZ) > 0 ? '正方向' : '负方向');
     }
 
-    const maxDistance = 4
-    const jumpDistance = maxDistance * power
+    // 修改跳跃距离计算方式
+    // 使用平台间实际距离作为基础
+    const platformDistance = Math.max(Math.abs(deltaX), Math.abs(deltaZ))
+    
+    // 根据力度计算实际跳跃距离
+    // 最小力度时跳跃距离为平台距离的60%，最大力度时为平台距离的110%
+    // 这样确保足够的力度时可以跳到目标平台，但不会跳得太远
+    const minJumpRatio = 0.6; // 最小跳跃比例
+    const maxJumpRatio = 3; // 最大跳跃比例，从5降低到1.1
+    const jumpRatio = minJumpRatio + (maxJumpRatio - minJumpRatio) * power;
+    const jumpDistance = platformDistance * jumpRatio;
+    
+    console.log('[DEBUG] 跳跃距离计算: platformDistance * jumpRatio =', 
+                platformDistance, '*', jumpRatio.toFixed(2), '=', jumpDistance.toFixed(2),
+                '(power =', power.toFixed(2), ')');
 
     // 计算目标位置（确保使用归一化的方向向量）
     direction.normalize()
+    console.log('[DEBUG] 归一化后的方向向量:', direction);
+    
     const targetPosition = new THREE.Vector3()
       .copy(playerPosition)
       .add(direction.multiplyScalar(jumpDistance))
+    console.log('[DEBUG] 初始目标位置:', targetPosition);
+    
+    // 优化：根据跳跃方向，强制对齐另一个轴的坐标到目标平台
+    if (Math.abs(deltaX) > Math.abs(deltaZ)) {
+      // 沿X轴方向跳跃（包括-X方向），强制Z坐标与目标平台一致
+      targetPosition.z = targetPlatformPos.z
+      console.log('[DEBUG] X轴方向跳跃，强制对齐Z坐标:', targetPosition.z)
+    } else {
+      // 沿Z轴方向跳跃（包括-Z方向），强制X坐标与目标平台一致
+      targetPosition.x = targetPlatformPos.x
+      console.log('[DEBUG] Z轴方向跳跃，强制对齐X坐标:', targetPosition.x)
+    }
+    console.log('[DEBUG] 最终目标位置:', targetPosition);
 
     // 调整玩家朝向
     const angle = Math.atan2(direction.x, direction.z)
     this.player.rotate(angle)
     
-    console.log(`开始跳跃: 力度=${power.toFixed(2)}, 距离=${jumpDistance.toFixed(2)}`)
-    console.log(`目标位置: x=${targetPosition.x.toFixed(2)}, z=${targetPosition.z.toFixed(2)}`)
+    console.log(`[DEBUG] 开始跳跃: 力度=${power.toFixed(2)}, 距离=${jumpDistance.toFixed(2)}`)
+    console.log(`[DEBUG] 目标位置: x=${targetPosition.x.toFixed(2)}, z=${targetPosition.z.toFixed(2)}`)
     
     this.player.jump(power, targetPosition, this.platforms, (success) => {
       if (success) {
@@ -709,6 +1146,246 @@ export class GameEngine {
     setTimeout(() => {
       this.startMessageElement.style.display = 'none'
     }, 1000)
+  }
+
+  // 开始基础模式
+  private startBasicMode(): void {
+    console.log(`[DEBUG] 实例 ${this.instanceId}: startBasicMode 被调用`);
+    console.log(`[DEBUG] 实例 ${this.instanceId}: 调用前的游戏状态:`, { 
+      instanceGameStarted: this.isGameStarted,
+      globalGameStarted: GameEngine.GLOBAL_GAME_STARTED
+    });
+    
+    // 隐藏游戏模式选择界面
+    if (this.gameModeSelectElement) {
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 隐藏游戏模式选择界面`);
+      this.gameModeSelectElement.style.display = 'none';
+    } else {
+      console.error(`[ERROR] 实例 ${this.instanceId}: gameModeSelectElement 不存在`);
+    }
+    
+    // 显示分数元素
+    if (this.scoreElement) {
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 显示分数元素`);
+      this.scoreElement.style.display = 'block';
+    } else {
+      console.error(`[ERROR] 实例 ${this.instanceId}: scoreElement 不存在`);
+    }
+    
+    // 设置全局游戏状态为已开始
+    GameEngine.GLOBAL_GAME_STARTED = true;
+    // 设置实例游戏状态为已开始
+    this.isGameStarted = true;
+    console.log(`[DEBUG] 实例 ${this.instanceId}: 游戏状态已设置为:`, { 
+      instanceGameStarted: this.isGameStarted,
+      globalGameStarted: GameEngine.GLOBAL_GAME_STARTED 
+    });
+    
+    // 激活音频上下文，确保第一次蓄力时能够播放声音
+    if (this.audioManager) {
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 激活音频上下文`);
+      // 播放一个静音的测试音效来激活音频上下文
+      this.audioManager.playTestSound();
+    }
+    
+    // 移除现有的事件监听器
+    this.removeEventListeners();
+    console.log(`[DEBUG] 实例 ${this.instanceId}: 已移除现有事件监听器`);
+    
+    // 添加交互事件监听器
+    this.addEventListeners();
+    console.log(`[DEBUG] 实例 ${this.instanceId}: 已添加新的事件监听器`);
+  }
+  
+  // 显示进化模式界面
+  private showEvolveMode(): void {
+    console.log(`[DEBUG] 实例 ${this.instanceId}: showEvolveMode 被调用`);
+    console.log(`[DEBUG] 实例 ${this.instanceId}: 调用前的游戏状态:`, { 
+      instanceGameStarted: this.isGameStarted,
+      globalGameStarted: GameEngine.GLOBAL_GAME_STARTED
+    });
+    
+    // 隐藏游戏模式选择界面
+    if (this.gameModeSelectElement) {
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 隐藏游戏模式选择界面`);
+      this.gameModeSelectElement.style.display = 'none';
+    } else {
+      console.error(`[ERROR] 实例 ${this.instanceId}: gameModeSelectElement 不存在`);
+    }
+    
+    // 显示进化模式界面
+    if (!this.evolveModeElement) {
+      // 创建进化模式界面
+      this.evolveModeElement = document.createElement('div');
+      this.evolveModeElement.style.position = 'absolute';
+      this.evolveModeElement.style.top = '50%';
+      this.evolveModeElement.style.left = '50%';
+      this.evolveModeElement.style.transform = 'translate(-50%, -50%)';
+      this.evolveModeElement.style.background = 'rgba(255, 255, 255, 0.9)';
+      this.evolveModeElement.style.padding = '2rem';
+      this.evolveModeElement.style.borderRadius = '1rem';
+      this.evolveModeElement.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
+      this.evolveModeElement.style.display = 'flex';
+      this.evolveModeElement.style.flexDirection = 'column';
+      this.evolveModeElement.style.alignItems = 'center';
+      this.evolveModeElement.style.gap = '1rem';
+      this.evolveModeElement.style.zIndex = '1001';
+      document.body.appendChild(this.evolveModeElement);
+      
+      // 添加标题
+      const evolveTitle = document.createElement('h2');
+      evolveTitle.textContent = '进化模式';
+      evolveTitle.style.margin = '0 0 1rem 0';
+      evolveTitle.style.color = '#333';
+      this.evolveModeElement.appendChild(evolveTitle);
+      
+      // 添加输入框
+      this.evolveInputElement = document.createElement('input');
+      this.evolveInputElement.type = 'text';
+      this.evolveInputElement.placeholder = '输入你的进化想法';
+      this.evolveInputElement.style.padding = '0.8rem 1rem';
+      this.evolveInputElement.style.borderRadius = '0.5rem';
+      this.evolveInputElement.style.border = '1px solid #ddd';
+      this.evolveInputElement.style.width = '100%';
+      this.evolveInputElement.style.fontSize = '1rem';
+      this.evolveInputElement.style.boxShadow = 'inset 0 2px 4px rgba(0, 0, 0, 0.1)';
+      this.evolveInputElement.style.transition = 'all 0.3s ease';
+      this.evolveInputElement.style.boxSizing = 'border-box';
+      this.evolveInputElement.addEventListener('focus', () => {
+        this.evolveInputElement.style.borderColor = '#4CAF50';
+        this.evolveInputElement.style.boxShadow = 'inset 0 2px 4px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(76, 175, 80, 0.2)';
+      });
+      this.evolveInputElement.addEventListener('blur', () => {
+        this.evolveInputElement.style.borderColor = '#ddd';
+        this.evolveInputElement.style.boxShadow = 'inset 0 2px 4px rgba(0, 0, 0, 0.1)';
+      });
+      this.evolveModeElement.appendChild(this.evolveInputElement);
+      
+      // 添加确认按钮（圆形）
+      this.evolveSubmitButton = document.createElement('button');
+      this.evolveSubmitButton.style.display = 'flex';
+      this.evolveSubmitButton.style.alignItems = 'center';
+      this.evolveSubmitButton.style.justifyContent = 'center';
+      this.evolveSubmitButton.style.width = '3rem';
+      this.evolveSubmitButton.style.height = '3rem';
+      this.evolveSubmitButton.style.borderRadius = '50%';
+      this.evolveSubmitButton.style.backgroundColor = '#4CAF50';
+      this.evolveSubmitButton.style.color = 'white';
+      this.evolveSubmitButton.style.border = 'none';
+      this.evolveSubmitButton.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.3)';
+      this.evolveSubmitButton.style.cursor = 'pointer';
+      this.evolveSubmitButton.style.transition = 'all 0.2s ease';
+      this.evolveSubmitButton.innerHTML = '✓'; // 勾选图标
+      this.evolveSubmitButton.style.fontSize = '1.5rem';
+      this.evolveSubmitButton.onmouseover = () => {
+        this.evolveSubmitButton.style.transform = 'scale(1.1)';
+        this.evolveSubmitButton.style.boxShadow = '0 5px 12px rgba(0, 0, 0, 0.35)';
+      };
+      this.evolveSubmitButton.onmouseout = () => {
+        this.evolveSubmitButton.style.transform = 'scale(1)';
+        this.evolveSubmitButton.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.3)';
+      };
+      this.evolveSubmitButton.addEventListener('click', () => this.handleEvolveSubmit());
+      this.evolveModeElement.appendChild(this.evolveSubmitButton);
+      
+      // 添加取消按钮
+      const cancelButton = document.createElement('div');
+      cancelButton.textContent = '取消';
+      cancelButton.style.marginTop = '1rem';
+      cancelButton.style.color = '#777';
+      cancelButton.style.cursor = 'pointer';
+      cancelButton.style.fontSize = '0.9rem';
+      cancelButton.style.transition = 'color 0.2s ease';
+      cancelButton.onmouseover = () => {
+        cancelButton.style.color = '#333';
+      };
+      cancelButton.onmouseout = () => {
+        cancelButton.style.color = '#777';
+      };
+      cancelButton.addEventListener('click', () => {
+        // 隐藏进化模式界面
+        if (this.evolveModeElement) {
+          this.evolveModeElement.style.display = 'none';
+        }
+        // 显示游戏模式选择界面
+        if (this.gameModeSelectElement) {
+          this.gameModeSelectElement.style.display = 'flex';
+        }
+        
+        // 取消时重置游戏状态
+        GameEngine.GLOBAL_GAME_STARTED = false;
+        this.isGameStarted = false;
+        console.log(`[DEBUG] 实例 ${this.instanceId}: 用户取消，重置游戏状态`);
+      });
+      this.evolveModeElement.appendChild(cancelButton);
+    }
+    
+    // 显示进化模式界面
+    this.evolveModeElement.style.display = 'flex';
+    console.log(`[DEBUG] 实例 ${this.instanceId}: 显示进化模式界面`);
+    
+    // 设置全局游戏状态为已开始
+    GameEngine.GLOBAL_GAME_STARTED = true;
+    // 设置实例游戏状态为已开始
+    this.isGameStarted = true;
+    console.log(`[DEBUG] 实例 ${this.instanceId}: 游戏状态已设置为:`, { 
+      instanceGameStarted: this.isGameStarted,
+      globalGameStarted: GameEngine.GLOBAL_GAME_STARTED 
+    });
+    
+    // 激活音频上下文，确保第一次蓄力时能够播放声音
+    if (this.audioManager) {
+      console.log(`[DEBUG] 实例 ${this.instanceId}: 激活音频上下文`);
+      // 播放一个静音的测试音效来激活音频上下文
+      this.audioManager.playTestSound();
+    }
+    
+    // 移除现有的事件监听器
+    this.removeEventListeners();
+    console.log(`[DEBUG] 实例 ${this.instanceId}: 已移除现有事件监听器`);
+    
+    // 添加交互事件监听器
+    this.addEventListeners();
+    console.log(`[DEBUG] 实例 ${this.instanceId}: 已添加新的事件监听器`);
+  }
+  
+  // 处理进化模式的输入提交
+  private handleEvolveSubmit(): void {
+    const inputText = this.evolveInputElement.value.trim()
+    
+    if (inputText) {
+      console.log('进化模式输入:', inputText)
+      
+      // 清空输入框
+      this.evolveInputElement.value = ''
+      
+      // 后续可以在这里添加处理逻辑
+    }
+  }
+  
+  // 添加交互事件监听器
+  private addEventListeners(): void {
+    console.log('[DEBUG] addEventListeners 被调用');
+    console.log('[DEBUG] 当前游戏状态:', { isGameStarted: this.isGameStarted });
+    
+    const container = this.renderer.domElement.parentElement;
+    if (!container) {
+      console.error('[ERROR] 找不到容器元素，无法添加事件监听器');
+      return;
+    }
+
+    console.log('[DEBUG] 添加事件监听器到容器元素:', container);
+    
+    // 首先移除可能存在的旧监听器，以防重复添加
+    this.removeEventListeners();
+    
+    // 添加新的事件监听器，使用绑定后的方法以确保this上下文正确
+    container.addEventListener('mousedown', this.onPressStart.bind(this));
+    container.addEventListener('mouseup', this.onPressEnd.bind(this));
+    container.addEventListener('touchstart', this.onPressStart.bind(this));
+    container.addEventListener('touchend', this.onPressEnd.bind(this));
+    
+    console.log('[DEBUG] 所有事件监听器已添加');
   }
 
   // 公共方法：获取场景实例
