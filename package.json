@@ -8,7 +8,8 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "dev:prod": "cross-env NODE_ENV=production vite"
+    "dev:prod": "cross-env NODE_ENV=production vite",
+    "dev:all": "node start-dev.js"
   },
   "dependencies": {
     "@react-three/cannon": "^6.6.0",

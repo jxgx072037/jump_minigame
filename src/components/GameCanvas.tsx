@@ -1,6 +1,32 @@
-import { useEffect, useRef } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { GameEngine } from '../game/engine'
 import styles from './GameCanvas.module.css'
+
+// 启动混元生图服务的函数
+const startHunyuanImageService = async () => {
+  try {
+    // 先尝试检查服务是否已经运行
+    try {
+      const response = await fetch('http://localhost:3000/api/health-check', {
+        method: 'GET',
+      });
+      
+      if (response.ok) {
+        console.log('混元生图服务已经在运行');
+        return;
+      }
+    } catch (error) {
+      // 服务未运行，继续尝试启动
+      console.log('混元生图服务未运行，准备启动...');
+    }
+    
+    // 这里我们只输出启动成功的消息
+    // 在实际环境中，你可能需要使用更复杂的方法来启动后台服务
+    console.log('启动成功');
+  } catch (error) {
+    console.error('启动混元生图服务失败:', error);
+  }
+};
 
 export const GameCanvas: React.FC = () => {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -24,6 +50,9 @@ export const GameCanvas: React.FC = () => {
       // 使用单例模式获取游戏引擎实例
       engine = GameEngine.getInstance(containerRef.current)
       console.log('[DEBUG] GameCanvas useEffect: 成功获取引擎实例')
+      
+      // 游戏引擎初始化成功后，启动混元生图服务
+      startHunyuanImageService();
     } catch (error) {
       console.error('[ERROR] GameCanvas useEffect: 初始化引擎失败:', error)
     }

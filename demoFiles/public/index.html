@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>腾讯混元生图服务</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <h1>腾讯混元生图服务</h1>
+    
+    <div class="card">
+      <h2>提交生图任务</h2>
+      <form id="imageForm">
+        <div class="form-group">
+          <label for="prompt">提示词 (Prompt) <span class="required">*</span></label>
+          <textarea id="prompt" name="prompt" required placeholder="请输入详细的图像描述，例如：一只可爱的卡通猫咪，在阳光明媚的草地上玩耍"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="negativePrompt">反向提示词 (Negative Prompt)</label>
+          <textarea id="negativePrompt" name="negativePrompt" placeholder="告诉AI不需要生成的内容，例如：模糊，扭曲，低质量"></textarea>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="style">绘画风格 (Style)</label>
+            <select id="style" name="style">
+              <option value="">默认</option>
+              <option value="riman">日漫动画</option>
+              <option value="shuimo">水墨画</option>
+              <option value="monai">莫奈</option>
+              <option value="bianping">扁平插画</option>
+              <option value="xiangsu">像素插画</option>
+              <option value="ertonghuiben">儿童绘本</option>
+              <option value="3dxuanran">3D 渲染</option>
+              <option value="manhua">漫画</option>
+              <option value="heibaimanhua">黑白漫画</option>
+              <option value="xieshi">写实</option>
+              <option value="dongman">动漫</option>
+              <option value="bijiasuo">毕加索</option>
+              <option value="saibopengke">赛博朋克</option>
+              <option value="youhua">油画</option>
+              <option value="masaike">马赛克</option>
+              <option value="qinghuaci">青花瓷</option>
+              <option value="xinnianjianzhi">新年剪纸画</option>
+              <option value="xinnianhuayi">新年花艺</option>
+            </select>
+          </div>
+
+          <div class="form-group half">
+            <label for="resolution">分辨率 (Resolution)</label>
+            <select id="resolution" name="resolution">
+              <option value="1024:1024">1024x1024 (1:1)</option>
+              <option value="768:768">768x768 (1:1)</option>
+              <option value="768:1024">768x1024 (3:4)</option>
+              <option value="1024:768">1024x768 (4:3)</option>
+              <option value="720:1280">720x1280 (9:16)</option>
+              <option value="1280:720">1280x720 (16:9)</option>
+              <option value="768:1280">768x1280 (3:5)</option>
+              <option value="1280:768">1280x768 (5:3)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="num">生成数量 (Num)</label>
+            <select id="num" name="num">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+
+          <div class="form-group half">
+            <label for="seed">随机种子 (Seed)</label>
+            <input type="number" id="seed" name="seed" placeholder="不填则随机生成">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="clarity">超分选项 (Clarity)</label>
+            <select id="clarity" name="clarity">
+              <option value="">不使用</option>
+              <option value="x2">x2</option>
+              <option value="x4">x4</option>
+            </select>
+          </div>
+
+          <div class="form-group half">
+            <label for="revise">Prompt扩写 (Revise)</label>
+            <select id="revise" name="revise">
+              <option value="1">开启(推荐)</option>
+              <option value="0">关闭</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group half">
+            <label for="logoAdd">水印 (Logo)</label>
+            <select id="logoAdd" name="logoAdd">
+              <option value="0">不添加(默认)</option>
+              <option value="1">添加</option>
+            </select>
+          </div>
+
+          <div class="form-group half">
+            <label for="logoParam">自定义水印 (Logo Param)</label>
+            <input type="text" id="logoParam" name="logoParam" placeholder="自定义水印参数">
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="submitBtn">提交生图任务</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card result-card" id="resultCard" style="display: none;">
+      <h2>生成结果</h2>
+      <div class="loading" id="loading">
+        <div class="spinner"></div>
+        <p>正在生成图片，请稍候...</p>
+        <p id="statusMessage"></p>
+      </div>
+
+      <div id="resultContent" style="display: none;">
+        <div class="result-info">
+          <h3>任务ID</h3>
+          <p id="jobId"></p>
+          
+          <h3>扩写后的提示词</h3>
+          <p id="revisedPrompt"></p>
+        </div>
+
+        <div class="image-gallery" id="imageGallery"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html> 

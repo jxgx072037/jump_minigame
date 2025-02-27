@@ -54,6 +54,13 @@ export class GameEngine {
   private evolveInputElement!: HTMLInputElement
   private evolveSubmitButton!: HTMLButtonElement
 
+  // 添加侧边栏相关属性
+  private sidebarElement!: HTMLDivElement
+  private imageResultContainer!: HTMLDivElement
+  private isGeneratingImage: boolean = false
+  private currentJobId: string = ''
+  private checkStatusInterval: number = 0
+
   private currentPlatformIndex: number = 0
   private targetPlatformIndex: number = 1
 
@@ -498,7 +505,7 @@ export class GameEngine {
 
   private setupLights(): void {
     // 主光源 - 从上方照射
-    const mainLight = new THREE.DirectionalLight(0xffffff, 5)
+    const mainLight = new THREE.DirectionalLight(0xffffff, 3) // 降低主光源强度
     mainLight.position.set(10, 10, 0)
     mainLight.castShadow = true
     
@@ -523,14 +530,14 @@ export class GameEngine {
     mainLight.shadow.blurSamples = 16
 
     // 调整光源位置和强度
-    mainLight.intensity = 2
+    mainLight.intensity = 1.5 // 降低光照强度，使纹理颜色更鲜艳
 
     this.scene.add(mainLight)
     // 保存主光源引用
     this.mainLight = mainLight
 
     // 填充光 - 增加环境光强度
-    const fillLight = new THREE.AmbientLight(0xffffff, 0.7)
+    const fillLight = new THREE.AmbientLight(0xffffff, 1.0) // 增加环境光强度
     this.scene.add(fillLight)
   }
 
@@ -1213,116 +1220,8 @@ export class GameEngine {
       console.error(`[ERROR] 实例 ${this.instanceId}: gameModeSelectElement 不存在`);
     }
     
-    // 显示进化模式界面
-    if (!this.evolveModeElement) {
-      // 创建进化模式界面
-      this.evolveModeElement = document.createElement('div');
-      this.evolveModeElement.style.position = 'absolute';
-      this.evolveModeElement.style.top = '50%';
-      this.evolveModeElement.style.left = '50%';
-      this.evolveModeElement.style.transform = 'translate(-50%, -50%)';
-      this.evolveModeElement.style.background = 'rgba(255, 255, 255, 0.9)';
-      this.evolveModeElement.style.padding = '2rem';
-      this.evolveModeElement.style.borderRadius = '1rem';
-      this.evolveModeElement.style.boxShadow = '0 4px 20px rgba(0, 0, 0, 0.3)';
-      this.evolveModeElement.style.display = 'flex';
-      this.evolveModeElement.style.flexDirection = 'column';
-      this.evolveModeElement.style.alignItems = 'center';
-      this.evolveModeElement.style.gap = '1rem';
-      this.evolveModeElement.style.zIndex = '1001';
-      document.body.appendChild(this.evolveModeElement);
-      
-      // 添加标题
-      const evolveTitle = document.createElement('h2');
-      evolveTitle.textContent = '进化模式';
-      evolveTitle.style.margin = '0 0 1rem 0';
-      evolveTitle.style.color = '#333';
-      this.evolveModeElement.appendChild(evolveTitle);
-      
-      // 添加输入框
-      this.evolveInputElement = document.createElement('input');
-      this.evolveInputElement.type = 'text';
-      this.evolveInputElement.placeholder = '输入你的进化想法';
-      this.evolveInputElement.style.padding = '0.8rem 1rem';
-      this.evolveInputElement.style.borderRadius = '0.5rem';
-      this.evolveInputElement.style.border = '1px solid #ddd';
-      this.evolveInputElement.style.width = '100%';
-      this.evolveInputElement.style.fontSize = '1rem';
-      this.evolveInputElement.style.boxShadow = 'inset 0 2px 4px rgba(0, 0, 0, 0.1)';
-      this.evolveInputElement.style.transition = 'all 0.3s ease';
-      this.evolveInputElement.style.boxSizing = 'border-box';
-      this.evolveInputElement.addEventListener('focus', () => {
-        this.evolveInputElement.style.borderColor = '#4CAF50';
-        this.evolveInputElement.style.boxShadow = 'inset 0 2px 4px rgba(0, 0, 0, 0.1), 0 0 0 3px rgba(76, 175, 80, 0.2)';
-      });
-      this.evolveInputElement.addEventListener('blur', () => {
-        this.evolveInputElement.style.borderColor = '#ddd';
-        this.evolveInputElement.style.boxShadow = 'inset 0 2px 4px rgba(0, 0, 0, 0.1)';
-      });
-      this.evolveModeElement.appendChild(this.evolveInputElement);
-      
-      // 添加确认按钮（圆形）
-      this.evolveSubmitButton = document.createElement('button');
-      this.evolveSubmitButton.style.display = 'flex';
-      this.evolveSubmitButton.style.alignItems = 'center';
-      this.evolveSubmitButton.style.justifyContent = 'center';
-      this.evolveSubmitButton.style.width = '3rem';
-      this.evolveSubmitButton.style.height = '3rem';
-      this.evolveSubmitButton.style.borderRadius = '50%';
-      this.evolveSubmitButton.style.backgroundColor = '#4CAF50';
-      this.evolveSubmitButton.style.color = 'white';
-      this.evolveSubmitButton.style.border = 'none';
-      this.evolveSubmitButton.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.3)';
-      this.evolveSubmitButton.style.cursor = 'pointer';
-      this.evolveSubmitButton.style.transition = 'all 0.2s ease';
-      this.evolveSubmitButton.innerHTML = '✓'; // 勾选图标
-      this.evolveSubmitButton.style.fontSize = '1.5rem';
-      this.evolveSubmitButton.onmouseover = () => {
-        this.evolveSubmitButton.style.transform = 'scale(1.1)';
-        this.evolveSubmitButton.style.boxShadow = '0 5px 12px rgba(0, 0, 0, 0.35)';
-      };
-      this.evolveSubmitButton.onmouseout = () => {
-        this.evolveSubmitButton.style.transform = 'scale(1)';
-        this.evolveSubmitButton.style.boxShadow = '0 3px 8px rgba(0, 0, 0, 0.3)';
-      };
-      this.evolveSubmitButton.addEventListener('click', () => this.handleEvolveSubmit());
-      this.evolveModeElement.appendChild(this.evolveSubmitButton);
-      
-      // 添加取消按钮
-      const cancelButton = document.createElement('div');
-      cancelButton.textContent = '取消';
-      cancelButton.style.marginTop = '1rem';
-      cancelButton.style.color = '#777';
-      cancelButton.style.cursor = 'pointer';
-      cancelButton.style.fontSize = '0.9rem';
-      cancelButton.style.transition = 'color 0.2s ease';
-      cancelButton.onmouseover = () => {
-        cancelButton.style.color = '#333';
-      };
-      cancelButton.onmouseout = () => {
-        cancelButton.style.color = '#777';
-      };
-      cancelButton.addEventListener('click', () => {
-        // 隐藏进化模式界面
-        if (this.evolveModeElement) {
-          this.evolveModeElement.style.display = 'none';
-        }
-        // 显示游戏模式选择界面
-        if (this.gameModeSelectElement) {
-          this.gameModeSelectElement.style.display = 'flex';
-        }
-        
-        // 取消时重置游戏状态
-        GameEngine.GLOBAL_GAME_STARTED = false;
-        this.isGameStarted = false;
-        console.log(`[DEBUG] 实例 ${this.instanceId}: 用户取消，重置游戏状态`);
-      });
-      this.evolveModeElement.appendChild(cancelButton);
-    }
-    
-    // 显示进化模式界面
-    this.evolveModeElement.style.display = 'flex';
-    console.log(`[DEBUG] 实例 ${this.instanceId}: 显示进化模式界面`);
+    // 创建侧边栏
+    this.createSidebar();
     
     // 设置全局游戏状态为已开始
     GameEngine.GLOBAL_GAME_STARTED = true;
@@ -1401,5 +1300,736 @@ export class GameEngine {
   // 公共方法：获取渲染器实例
   public getRenderer(): THREE.WebGLRenderer {
     return this.renderer
+  }
+
+  // 创建侧边栏
+  private createSidebar(): void {
+    // 创建侧边栏容器
+    this.sidebarElement = document.createElement('div');
+    this.sidebarElement.style.position = 'fixed';
+    this.sidebarElement.style.top = '0';
+    this.sidebarElement.style.left = '0';
+    this.sidebarElement.style.width = '300px';
+    this.sidebarElement.style.height = '100%';
+    this.sidebarElement.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+    this.sidebarElement.style.boxShadow = '2px 0 5px rgba(0, 0, 0, 0.1)';
+    this.sidebarElement.style.padding = '20px';
+    this.sidebarElement.style.overflowY = 'auto';
+    this.sidebarElement.style.zIndex = '1000';
+    this.sidebarElement.style.display = 'flex';
+    this.sidebarElement.style.flexDirection = 'column';
+    this.sidebarElement.style.gap = '15px';
+    document.body.appendChild(this.sidebarElement);
+    
+    // 添加标题
+    const titleElement = document.createElement('h2');
+    titleElement.textContent = '混元生图';
+    titleElement.style.margin = '0 0 20px 0';
+    titleElement.style.borderBottom = '1px solid #ddd';
+    titleElement.style.paddingBottom = '10px';
+    this.sidebarElement.appendChild(titleElement);
+    
+    // 添加测试按钮
+    const testButton = document.createElement('button');
+    testButton.textContent = '测试替换地面纹理';
+    testButton.style.padding = '10px';
+    testButton.style.backgroundColor = '#ff9800';
+    testButton.style.color = 'white';
+    testButton.style.border = 'none';
+    testButton.style.borderRadius = '4px';
+    testButton.style.cursor = 'pointer';
+    testButton.style.marginBottom = '20px';
+    testButton.style.width = '100%';
+    testButton.onclick = () => {
+      // 使用一个本地测试图片URL
+      const testImageUrl = '/images/test-texture.jpg';
+      this.replaceGroundWithImage(testImageUrl);
+    };
+    this.sidebarElement.appendChild(testButton);
+    
+    // 创建图片生成表单
+    this.createImageGenerationForm();
+    
+    // 创建结果容器
+    this.imageResultContainer = document.createElement('div');
+    this.imageResultContainer.style.marginTop = '20px';
+    this.sidebarElement.appendChild(this.imageResultContainer);
+    
+    // 添加关闭按钮
+    const closeButton = document.createElement('button');
+    closeButton.textContent = '关闭侧边栏';
+    closeButton.style.marginTop = 'auto';
+    closeButton.style.padding = '8px 15px';
+    closeButton.style.backgroundColor = '#f44336';
+    closeButton.style.color = 'white';
+    closeButton.style.border = 'none';
+    closeButton.style.borderRadius = '4px';
+    closeButton.style.cursor = 'pointer';
+    closeButton.style.transition = 'background-color 0.3s';
+    closeButton.onmouseover = () => {
+      closeButton.style.backgroundColor = '#d32f2f';
+    };
+    closeButton.onmouseout = () => {
+      closeButton.style.backgroundColor = '#f44336';
+    };
+    closeButton.onclick = () => {
+      this.sidebarElement.style.display = 'none';
+      
+      // 创建一个打开按钮
+      const openButton = document.createElement('button');
+      openButton.textContent = '打开侧边栏';
+      openButton.style.position = 'absolute';
+      openButton.style.top = '10px';
+      openButton.style.left = '10px';
+      openButton.style.padding = '8px 15px';
+      openButton.style.backgroundColor = '#4CAF50';
+      openButton.style.color = 'white';
+      openButton.style.border = 'none';
+      openButton.style.borderRadius = '4px';
+      openButton.style.cursor = 'pointer';
+      openButton.style.zIndex = '999';
+      openButton.style.transition = 'background-color 0.3s';
+      openButton.onmouseover = () => {
+        openButton.style.backgroundColor = '#388E3C';
+      };
+      openButton.onmouseout = () => {
+        openButton.style.backgroundColor = '#4CAF50';
+      };
+      openButton.onclick = () => {
+        this.sidebarElement.style.display = 'flex';
+        document.body.removeChild(openButton);
+      };
+      document.body.appendChild(openButton);
+    };
+    this.sidebarElement.appendChild(closeButton);
+  }
+
+  // 创建图片生成表单
+  private createImageGenerationForm(): void {
+    const form = document.createElement('form');
+    form.style.display = 'flex';
+    form.style.flexDirection = 'column';
+    form.style.gap = '15px';
+    
+    // 添加提示词输入
+    this.addFormField(form, 'prompt', '提示词', '一只可爱的卡通猫咪，在阳光明媚的草地上玩耍', 'textarea');
+    
+    // 添加反向提示词输入
+    this.addFormField(form, 'negativePrompt', '反向提示词', '模糊，扭曲，低质量');
+    
+    // 添加风格选择
+    const styleOptions = [
+      { value: '', label: '默认风格' },
+      { value: 'riman', label: '日漫动画' },
+      { value: 'shuimo', label: '水墨画' },
+      { value: 'monai', label: '莫奈' },
+      { value: 'bianping', label: '扁平插画' },
+      { value: 'xiangsu', label: '像素插画' },
+      { value: 'ertonghuiben', label: '儿童绘本' },
+      { value: '3dxuanran', label: '3D 渲染' },
+      { value: 'manhua', label: '漫画' },
+      { value: 'heibaimanhua', label: '黑白漫画' },
+      { value: 'xieshi', label: '写实' },
+      { value: 'dongman', label: '动漫' },
+      { value: 'bijiasuo', label: '毕加索' },
+      { value: 'saibopengke', label: '赛博朋克' },
+      { value: 'youhua', label: '油画' },
+      { value: 'masaike', label: '马赛克' },
+      { value: 'qinghuaci', label: '青花瓷' },
+      { value: 'xinnianjianzhi', label: '新年剪纸画' },
+      { value: 'xinnianhuayi', label: '新年花艺' }
+    ];
+    this.addFormSelect(form, 'style', '风格', styleOptions);
+    
+    // 添加分辨率选择
+    const resolutionOptions = [
+      { value: '1024:1024', label: '1024x1024 (1:1)' },
+      { value: '768:768', label: '768x768 (1:1)' },
+      { value: '768:1024', label: '768x1024 (3:4)' },
+      { value: '1024:768', label: '1024x768 (4:3)' },
+      { value: '720:1280', label: '720x1280 (9:16)' },
+      { value: '1280:720', label: '1280x720 (16:9)' },
+      { value: '768:1280', label: '768x1280 (3:5)' },
+      { value: '1280:768', label: '1280x768 (5:3)' }
+    ];
+    this.addFormSelect(form, 'resolution', '分辨率', resolutionOptions);
+    
+    // 添加生成数量选择
+    const numOptions = [
+      { value: '1', label: '1张' },
+      { value: '2', label: '2张' },
+      { value: '3', label: '3张' },
+      { value: '4', label: '4张' }
+    ];
+    this.addFormSelect(form, 'num', '生成数量', numOptions);
+    
+    // 添加随机种子输入
+    this.addFormField(form, 'seed', '随机种子 (可选)', '');
+    
+    // 添加超分选项
+    const clarityOptions = [
+      { value: '', label: '不使用超分' },
+      { value: 'x2', label: '2倍超分' },
+      { value: 'x4', label: '4倍超分' }
+    ];
+    this.addFormSelect(form, 'clarity', '超分选项', clarityOptions);
+    
+    // 添加prompt扩写开关
+    const reviseOptions = [
+      { value: '1', label: '开启 (推荐)' },
+      { value: '0', label: '关闭' }
+    ];
+    this.addFormSelect(form, 'revise', 'Prompt扩写', reviseOptions);
+    
+    // 添加水印开关
+    const logoAddOptions = [
+      { value: '0', label: '不添加 (默认)' },
+      { value: '1', label: '添加' }
+    ];
+    this.addFormSelect(form, 'logoAdd', '水印', logoAddOptions);
+    
+    // 添加自定义水印参数
+    this.addFormField(form, 'logoParam', '自定义水印 (可选)', '');
+    
+    // 添加提交按钮
+    const submitButton = document.createElement('button');
+    submitButton.type = 'submit';
+    submitButton.textContent = '生成图片';
+    submitButton.style.padding = '10px 15px';
+    submitButton.style.backgroundColor = '#4CAF50';
+    submitButton.style.color = 'white';
+    submitButton.style.border = 'none';
+    submitButton.style.borderRadius = '4px';
+    submitButton.style.cursor = 'pointer';
+    submitButton.style.marginTop = '10px';
+    submitButton.style.transition = 'background-color 0.3s';
+    submitButton.onmouseover = () => {
+      if (!this.isGeneratingImage) {
+        submitButton.style.backgroundColor = '#388E3C';
+      }
+    };
+    submitButton.onmouseout = () => {
+      if (!this.isGeneratingImage) {
+        submitButton.style.backgroundColor = '#4CAF50';
+      }
+    };
+    form.appendChild(submitButton);
+    
+    // 添加表单提交事件
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      
+      if (this.isGeneratingImage) {
+        return;
+      }
+      
+      // 获取表单数据
+      const formData = new FormData(form);
+      const data: Record<string, string> = {};
+      formData.forEach((value, key) => {
+        data[key] = value.toString();
+      });
+      
+      // 提交生成请求
+      this.submitImageGenerationJob(data, submitButton);
+    };
+    
+    this.sidebarElement.appendChild(form);
+  }
+  
+  // 添加表单字段
+  private addFormField(form: HTMLFormElement, name: string, label: string, placeholder: string, type: string = 'text'): void {
+    const fieldContainer = document.createElement('div');
+    fieldContainer.style.display = 'flex';
+    fieldContainer.style.flexDirection = 'column';
+    fieldContainer.style.gap = '5px';
+    
+    const labelElement = document.createElement('label');
+    labelElement.textContent = label;
+    labelElement.style.fontSize = '14px';
+    labelElement.style.fontWeight = 'bold';
+    labelElement.htmlFor = name;
+    fieldContainer.appendChild(labelElement);
+    
+    if (type === 'textarea') {
+      const textarea = document.createElement('textarea');
+      textarea.name = name;
+      textarea.id = name;
+      textarea.placeholder = placeholder;
+      textarea.rows = 3;
+      textarea.style.padding = '8px';
+      textarea.style.borderRadius = '4px';
+      textarea.style.border = '1px solid #ddd';
+      textarea.style.resize = 'vertical';
+      fieldContainer.appendChild(textarea);
+    } else {
+      const input = document.createElement('input');
+      input.type = type;
+      input.name = name;
+      input.id = name;
+      input.placeholder = placeholder;
+      input.style.padding = '8px';
+      input.style.borderRadius = '4px';
+      input.style.border = '1px solid #ddd';
+      fieldContainer.appendChild(input);
+    }
+    
+    form.appendChild(fieldContainer);
+  }
+  
+  // 添加下拉选择框
+  private addFormSelect(form: HTMLFormElement, name: string, label: string, options: { value: string, label: string }[]): void {
+    const fieldContainer = document.createElement('div');
+    fieldContainer.style.display = 'flex';
+    fieldContainer.style.flexDirection = 'column';
+    fieldContainer.style.gap = '5px';
+    
+    const labelElement = document.createElement('label');
+    labelElement.textContent = label;
+    labelElement.style.fontSize = '14px';
+    labelElement.style.fontWeight = 'bold';
+    labelElement.htmlFor = name;
+    fieldContainer.appendChild(labelElement);
+    
+    const select = document.createElement('select');
+    select.name = name;
+    select.id = name;
+    select.style.padding = '8px';
+    select.style.borderRadius = '4px';
+    select.style.border = '1px solid #ddd';
+    
+    options.forEach(option => {
+      const optionElement = document.createElement('option');
+      optionElement.value = option.value;
+      optionElement.textContent = option.label;
+      select.appendChild(optionElement);
+    });
+    
+    fieldContainer.appendChild(select);
+    form.appendChild(fieldContainer);
+  }
+
+  // 提交图片生成任务
+  private async submitImageGenerationJob(data: Record<string, string>, submitButton: HTMLButtonElement): Promise<void> {
+    try {
+      // 更新按钮状态
+      this.isGeneratingImage = true;
+      submitButton.textContent = '生成中...';
+      submitButton.style.backgroundColor = '#9E9E9E';
+      submitButton.style.cursor = 'not-allowed';
+      
+      // 清空之前的结果
+      this.imageResultContainer.innerHTML = '';
+      
+      // 添加加载提示
+      const loadingElement = document.createElement('div');
+      loadingElement.textContent = '正在提交生成任务...';
+      loadingElement.style.padding = '10px';
+      loadingElement.style.backgroundColor = '#f5f5f5';
+      loadingElement.style.borderRadius = '4px';
+      loadingElement.style.textAlign = 'center';
+      this.imageResultContainer.appendChild(loadingElement);
+      
+      // 提交任务
+      const response = await fetch('http://localhost:3000/api/submit-image-job', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          prompt: data.prompt,
+          negativePrompt: data.negativePrompt,
+          style: data.style,
+          resolution: data.resolution,
+          num: data.num,
+          seed: data.seed,
+          clarity: data.clarity,
+          revise: data.revise,
+          logoAdd: data.logoAdd,
+          logoParam: data.logoParam
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`提交失败: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      this.currentJobId = result.JobId;
+      
+      // 更新加载提示
+      loadingElement.textContent = `任务已提交，正在生成中 (任务ID: ${this.currentJobId})...`;
+      
+      // 开始轮询任务状态
+      this.checkStatusInterval = window.setInterval(() => {
+        this.checkImageGenerationStatus(loadingElement, submitButton);
+      }, 3000);
+      
+    } catch (error) {
+      console.error('提交图片生成任务失败:', error);
+      
+      // 显示错误信息
+      this.imageResultContainer.innerHTML = '';
+      const errorElement = document.createElement('div');
+      errorElement.textContent = `生成失败: ${error instanceof Error ? error.message : '未知错误'}`;
+      errorElement.style.padding = '10px';
+      errorElement.style.backgroundColor = '#ffebee';
+      errorElement.style.color = '#c62828';
+      errorElement.style.borderRadius = '4px';
+      errorElement.style.textAlign = 'center';
+      this.imageResultContainer.appendChild(errorElement);
+      
+      // 重置按钮状态
+      this.isGeneratingImage = false;
+      submitButton.textContent = '生成图片';
+      submitButton.style.backgroundColor = '#4CAF50';
+      submitButton.style.cursor = 'pointer';
+    }
+  }
+  
+  // 检查图片生成任务状态
+  private async checkImageGenerationStatus(loadingElement: HTMLDivElement, submitButton: HTMLButtonElement): Promise<void> {
+    try {
+      const response = await fetch(`http://localhost:3000/api/query-image-job/${this.currentJobId}`, {
+        method: 'GET',
+      });
+      
+      if (!response.ok) {
+        throw new Error(`查询失败: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      
+      // 检查任务状态
+      if (result.JobStatusCode === '5') { // 处理完成
+        // 清除轮询
+        clearInterval(this.checkStatusInterval);
+        
+        // 显示生成的图片
+        this.displayGeneratedImages(result);
+        
+        // 重置按钮状态
+        this.isGeneratingImage = false;
+        submitButton.textContent = '生成图片';
+        submitButton.style.backgroundColor = '#4CAF50';
+        submitButton.style.cursor = 'pointer';
+      } else if (result.JobStatusCode === '3') { // 处理中
+        loadingElement.textContent = `任务正在处理中 (任务ID: ${this.currentJobId})...`;
+      } else if (result.JobStatusCode === '4') { // 处理失败
+        // 清除轮询
+        clearInterval(this.checkStatusInterval);
+        
+        // 显示错误信息
+        this.imageResultContainer.innerHTML = '';
+        const errorElement = document.createElement('div');
+        errorElement.textContent = `生成失败: ${result.JobErrorMsg || '未知错误'}`;
+        errorElement.style.padding = '10px';
+        errorElement.style.backgroundColor = '#ffebee';
+        errorElement.style.color = '#c62828';
+        errorElement.style.borderRadius = '4px';
+        errorElement.style.textAlign = 'center';
+        this.imageResultContainer.appendChild(errorElement);
+        
+        // 重置按钮状态
+        this.isGeneratingImage = false;
+        submitButton.textContent = '生成图片';
+        submitButton.style.backgroundColor = '#4CAF50';
+        submitButton.style.cursor = 'pointer';
+      }
+    } catch (error) {
+      console.error('查询图片生成任务状态失败:', error);
+      
+      // 不中断轮询，继续尝试
+      loadingElement.textContent = `查询状态失败，正在重试... (任务ID: ${this.currentJobId})`;
+    }
+  }
+  
+  // 显示生成的图片
+  private displayGeneratedImages(result: any): void {
+    // 清空结果容器
+    this.imageResultContainer.innerHTML = '';
+    
+    // 添加标题
+    const titleElement = document.createElement('h3');
+    titleElement.textContent = '生成结果';
+    titleElement.style.margin = '0 0 10px 0';
+    titleElement.style.borderBottom = '1px solid #ddd';
+    titleElement.style.paddingBottom = '5px';
+    this.imageResultContainer.appendChild(titleElement);
+    
+    // 如果有修改后的提示词，显示它
+    if (result.RevisedPrompt && result.RevisedPrompt.length > 0) {
+      const revisedPromptContainer = document.createElement('div');
+      revisedPromptContainer.style.marginBottom = '15px';
+      revisedPromptContainer.style.padding = '10px';
+      revisedPromptContainer.style.backgroundColor = '#e8f5e9';
+      revisedPromptContainer.style.borderRadius = '4px';
+      revisedPromptContainer.style.fontSize = '14px';
+      
+      const revisedPromptTitle = document.createElement('div');
+      revisedPromptTitle.textContent = '扩写后的提示词:';
+      revisedPromptTitle.style.fontWeight = 'bold';
+      revisedPromptTitle.style.marginBottom = '5px';
+      revisedPromptContainer.appendChild(revisedPromptTitle);
+      
+      const revisedPromptText = document.createElement('div');
+      revisedPromptText.textContent = result.RevisedPrompt[0];
+      revisedPromptContainer.appendChild(revisedPromptText);
+      
+      this.imageResultContainer.appendChild(revisedPromptContainer);
+    }
+    
+    // 显示生成的图片
+    if (result.ResultImage && result.ResultImage.length > 0) {
+      const imagesContainer = document.createElement('div');
+      imagesContainer.style.display = 'flex';
+      imagesContainer.style.flexDirection = 'column';
+      imagesContainer.style.gap = '15px';
+      
+      result.ResultImage.forEach((imageUrl: string, index: number) => {
+        const imageContainer = document.createElement('div');
+        imageContainer.style.display = 'flex';
+        imageContainer.style.flexDirection = 'column';
+        imageContainer.style.gap = '5px';
+        
+        // 创建图片元素
+        const image = document.createElement('img');
+        image.src = imageUrl;
+        image.alt = `生成图片 ${index + 1}`;
+        image.style.width = '100%';
+        image.style.borderRadius = '4px';
+        image.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.1)';
+        imageContainer.appendChild(image);
+        
+        // 添加替换按钮
+        const replaceButton = document.createElement('button');
+        replaceButton.textContent = '替换';
+        replaceButton.style.textAlign = 'center';
+        replaceButton.style.padding = '8px';
+        replaceButton.style.backgroundColor = '#4CAF50';
+        replaceButton.style.color = 'white';
+        replaceButton.style.border = 'none';
+        replaceButton.style.borderRadius = '4px';
+        replaceButton.style.marginTop = '5px';
+        replaceButton.style.cursor = 'pointer';
+        replaceButton.style.transition = 'background-color 0.3s';
+        replaceButton.onmouseover = () => {
+          replaceButton.style.backgroundColor = '#388E3C';
+        };
+        replaceButton.onmouseout = () => {
+          replaceButton.style.backgroundColor = '#4CAF50';
+        };
+        replaceButton.onclick = () => {
+          // 直接调用替换方法
+          this.replaceGroundWithImage(imageUrl);
+          
+          // 添加替换成功提示
+          const successMessage = document.createElement('div');
+          successMessage.textContent = '替换成功！';
+          successMessage.style.color = '#4CAF50';
+          successMessage.style.fontWeight = 'bold';
+          successMessage.style.marginTop = '5px';
+          successMessage.style.textAlign = 'center';
+          imageContainer.appendChild(successMessage);
+          
+          // 2秒后移除提示
+          setTimeout(() => {
+            if (imageContainer.contains(successMessage)) {
+              imageContainer.removeChild(successMessage);
+            }
+          }, 2000);
+        };
+        imageContainer.appendChild(replaceButton);
+        
+        // 添加下载按钮
+        const downloadButton = document.createElement('a');
+        downloadButton.href = imageUrl;
+        downloadButton.download = `generated-image-${Date.now()}-${index}.jpg`;
+        downloadButton.textContent = '下载图片';
+        downloadButton.style.textAlign = 'center';
+        downloadButton.style.padding = '8px';
+        downloadButton.style.backgroundColor = '#2196F3';
+        downloadButton.style.color = 'white';
+        downloadButton.style.textDecoration = 'none';
+        downloadButton.style.borderRadius = '4px';
+        downloadButton.style.marginTop = '5px';
+        downloadButton.target = '_blank';
+        imageContainer.appendChild(downloadButton);
+        
+        imagesContainer.appendChild(imageContainer);
+      });
+      
+      this.imageResultContainer.appendChild(imagesContainer);
+    } else {
+      // 没有图片结果
+      const noImageElement = document.createElement('div');
+      noImageElement.textContent = '没有生成图片结果';
+      noImageElement.style.padding = '10px';
+      noImageElement.style.backgroundColor = '#f5f5f5';
+      noImageElement.style.borderRadius = '4px';
+      noImageElement.style.textAlign = 'center';
+      this.imageResultContainer.appendChild(noImageElement);
+    }
+  }
+  
+  // 用生成的图片替换地面
+  private replaceGroundWithImage(imageUrl: string): void {
+    // 添加调试日志
+    console.log('开始加载图片纹理，URL:', imageUrl);
+    
+    // 检查是否是外部URL，如果是则使用代理
+    let processedImageUrl = imageUrl;
+    if (imageUrl.startsWith('http') && !imageUrl.includes('localhost') && !imageUrl.includes('127.0.0.1')) {
+      // 使用本地代理服务器转发请求，解决CORS问题
+      processedImageUrl = `http://localhost:3000/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+      console.log('使用代理URL:', processedImageUrl);
+    }
+    
+    // 使用TextureLoader直接加载纹理
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.crossOrigin = 'anonymous';
+    
+    // 创建加载中的提示
+    const loadingElement = document.createElement('div');
+    loadingElement.textContent = '正在加载纹理...';
+    loadingElement.style.position = 'fixed';
+    loadingElement.style.bottom = '20px';
+    loadingElement.style.right = '20px';
+    loadingElement.style.backgroundColor = 'rgba(0, 0, 0, 0.7)';
+    loadingElement.style.color = 'white';
+    loadingElement.style.padding = '10px';
+    loadingElement.style.borderRadius = '5px';
+    loadingElement.style.zIndex = '1000';
+    document.body.appendChild(loadingElement);
+    
+    // 重新创建地面
+    textureLoader.load(
+      processedImageUrl,
+      (texture) => {
+        console.log('纹理加载成功', texture);
+        
+        // 确保纹理已更新
+        texture.needsUpdate = true;
+        
+        // 获取当前平台的位置
+        const currentPlatform = this.platforms[this.currentPlatformIndex];
+        const platformPosition = currentPlatform.getPosition();
+        console.log('当前平台位置:', platformPosition);
+        
+        // 移除旧地面
+        if (this.ground) {
+          console.log('移除旧地面');
+          this.scene.remove(this.ground);
+          if (this.ground.material) {
+            const oldMaterial = this.ground.material as THREE.MeshStandardMaterial;
+            if (oldMaterial.map) {
+              oldMaterial.map.dispose();
+            }
+            oldMaterial.dispose();
+          }
+          this.ground.geometry.dispose();
+        }
+        
+        // 创建新地面
+        console.log('创建新地面');
+        const groundGeometry = new THREE.PlaneGeometry(120, 120);
+        
+        // 调整纹理设置
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        texture.repeat.set(1, 1);
+        texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+        
+        const groundMaterial = new THREE.MeshStandardMaterial({
+          map: texture,
+          metalness: 0.1,
+          roughness: 0.8,
+          transparent: false,
+          side: THREE.DoubleSide, // 确保两面都可见
+          color: 0xffffff, // 使用纯白色作为基础颜色，不影响纹理
+          emissive: 0x222222, // 添加一些自发光，使颜色更鲜艳
+          emissiveIntensity: 0.2 // 控制自发光强度
+        });
+        
+        // 尝试设置纹理颜色空间（如果支持的话）
+        try {
+          // @ts-ignore - 忽略类型检查，因为不同版本的Three.js API可能不同
+          texture.colorSpace = THREE.SRGBColorSpace;
+        } catch (e) {
+          console.log('设置纹理颜色空间失败，可能是Three.js版本不支持:', e);
+        }
+        
+        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.y = -0.001;
+        ground.position.x = platformPosition.x;
+        ground.position.z = platformPosition.z;
+        ground.receiveShadow = true;
+        ground.castShadow = false;
+        
+        // 添加到场景
+        this.scene.add(ground);
+        this.ground = ground;
+        
+        console.log('地面已替换为生成的图片', ground);
+        
+        // 强制更新渲染
+        this.renderer.render(this.scene, this.camera);
+        
+        // 确保在下一帧也更新
+        requestAnimationFrame(() => {
+          this.renderer.render(this.scene, this.camera);
+        });
+        
+        // 移除加载提示
+        document.body.removeChild(loadingElement);
+        
+        // 显示成功提示
+        const successElement = document.createElement('div');
+        successElement.textContent = '纹理应用成功！';
+        successElement.style.position = 'fixed';
+        successElement.style.bottom = '20px';
+        successElement.style.right = '20px';
+        successElement.style.backgroundColor = 'rgba(0, 128, 0, 0.7)';
+        successElement.style.color = 'white';
+        successElement.style.padding = '10px';
+        successElement.style.borderRadius = '5px';
+        successElement.style.zIndex = '1000';
+        document.body.appendChild(successElement);
+        
+        // 2秒后移除成功提示
+        setTimeout(() => {
+          document.body.removeChild(successElement);
+        }, 2000);
+      },
+      (progress) => {
+        // 添加进度回调
+        console.log('纹理加载进度:', progress);
+        loadingElement.textContent = `正在加载纹理... ${Math.round(progress.loaded / progress.total * 100)}%`;
+      },
+      (error) => {
+        console.error('加载图片纹理失败:', error);
+        // 移除加载提示
+        document.body.removeChild(loadingElement);
+        
+        // 显示错误提示
+        const errorElement = document.createElement('div');
+        errorElement.textContent = '纹理加载失败！';
+        errorElement.style.position = 'fixed';
+        errorElement.style.bottom = '20px';
+        errorElement.style.right = '20px';
+        errorElement.style.backgroundColor = 'rgba(255, 0, 0, 0.7)';
+        errorElement.style.color = 'white';
+        errorElement.style.padding = '10px';
+        errorElement.style.borderRadius = '5px';
+        errorElement.style.zIndex = '1000';
+        document.body.appendChild(errorElement);
+        
+        // 2秒后移除错误提示
+        setTimeout(() => {
+          document.body.removeChild(errorElement);
+        }, 2000);
+      }
+    );
   }
 } 
