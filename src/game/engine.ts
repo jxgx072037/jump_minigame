@@ -505,7 +505,7 @@ export class GameEngine {
 
   private setupLights(): void {
     // 主光源 - 从上方照射
-    const mainLight = new THREE.DirectionalLight(0xffffff, 3) // 降低主光源强度
+    const mainLight = new THREE.DirectionalLight(0xffffff, 4) // 增加主光源强度
     mainLight.position.set(10, 10, 0)
     mainLight.castShadow = true
     
@@ -530,14 +530,14 @@ export class GameEngine {
     mainLight.shadow.blurSamples = 16
 
     // 调整光源位置和强度
-    mainLight.intensity = 1.5 // 降低光照强度，使纹理颜色更鲜艳
+    mainLight.intensity = 2.5 // 增加光照强度，使地面更加明亮
 
     this.scene.add(mainLight)
     // 保存主光源引用
     this.mainLight = mainLight
 
     // 填充光 - 增加环境光强度
-    const fillLight = new THREE.AmbientLight(0xffffff, 1.0) // 增加环境光强度
+    const fillLight = new THREE.AmbientLight(0xffffff, 1.5) // 增加环境光强度
     this.scene.add(fillLight)
   }
 
@@ -617,12 +617,14 @@ export class GameEngine {
     this.renderAxes = renderAxes
 
     // 添加地面平面
-    const groundGeometry = new THREE.PlaneGeometry(120, 120)
+    const groundGeometry = new THREE.PlaneGeometry(100, 100); // 稍微减小地面尺寸，与纹理重复设置相匹配
     const groundMaterial = new THREE.MeshStandardMaterial({
-      color: 0xFAFAFA,
-      metalness: 0,
-      roughness: 1,
-      transparent: false
+      color: 0xFFFFFF, // 使用纯白色
+      metalness: 0.2, // 增加金属感
+      roughness: 0.6, // 降低粗糙度
+      transparent: false,
+      emissive: 0x333333, // 添加自发光
+      emissiveIntensity: 0.3 // 控制自发光强度
     })
     const ground = new THREE.Mesh(groundGeometry, groundMaterial)
     ground.rotation.x = -Math.PI / 2
@@ -1932,23 +1934,23 @@ export class GameEngine {
         
         // 创建新地面
         console.log('创建新地面');
-        const groundGeometry = new THREE.PlaneGeometry(120, 120);
+        const groundGeometry = new THREE.PlaneGeometry(100, 100); // 稍微减小地面尺寸，与纹理重复设置相匹配
         
         // 调整纹理设置
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(1, 1);
+        texture.repeat.set(3, 3); // 将重复次数从1增加到3，使图片在地面上显示得更小
         texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
         
         const groundMaterial = new THREE.MeshStandardMaterial({
           map: texture,
-          metalness: 0.1,
-          roughness: 0.8,
+          metalness: 0.2, // 增加金属感
+          roughness: 0.6, // 降低粗糙度，使表面更加光滑
           transparent: false,
           side: THREE.DoubleSide, // 确保两面都可见
           color: 0xffffff, // 使用纯白色作为基础颜色，不影响纹理
-          emissive: 0x222222, // 添加一些自发光，使颜色更鲜艳
-          emissiveIntensity: 0.2 // 控制自发光强度
+          emissive: 0x333333, // 增加自发光颜色强度
+          emissiveIntensity: 0.4 // 增加自发光强度
         });
         
         // 尝试设置纹理颜色空间（如果支持的话）

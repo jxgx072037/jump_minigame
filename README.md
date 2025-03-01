@@ -100,19 +100,22 @@ cd jump-game
 # 安装依赖
 npm install
 
-# 启动开发服务器
-npm run dev
+# 方法一：一键启动（同时启动生图服务和游戏）
+npm run dev:all
+
+# 方法二：分步启动（推荐用于调试）
+# 1. 先启动生图服务
+node demoFiles/imageGenerationServer.js
+
+# 2. 再启动游戏（在新的终端窗口中）
+npm run dev -- --host
 ```
 
 启动开发服务器后，如果一切正常，终端将显示本地访问地址（通常是 `http://localhost:5173/`）。在浏览器中打开这个地址，就可以看到游戏画面并开始游玩了。
 
-如果您想在同一网络下的其他设备（如手机）上访问游戏，可以使用以下命令启动服务器：
+如果您想在同一网络下的其他设备（如手机）上访问游戏，请确保使用 `--host` 参数启动服务器，如方法二所示。
 
-```bash
-npm run dev -- --host
-```
-
-然后在其他设备的浏览器中访问终端显示的网络地址。
+> **注意**：生图服务需要腾讯云的密钥环境变量 `TENCENT_SECRET_ID` 和 `TENCENT_SECRET_KEY`。请确保这些环境变量已正确设置。
 
 ### 构建生产版本
 
@@ -147,6 +150,8 @@ jump-game/
 │   │   └── player.ts  # 玩家控制
 │   ├── App.tsx        # 应用主组件
 │   └── main.tsx       # 入口文件
+├── demoFiles/         # 演示文件
+│   └── imageGenerationServer.js # 生图服务器
 ├── index.html         # HTML模板
 ├── package.json       # 项目配置
 ├── tsconfig.json      # TypeScript配置
