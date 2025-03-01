@@ -56,6 +56,7 @@ export class GameEngine {
 
   // 添加侧边栏相关属性
   private sidebarElement!: HTMLDivElement
+  private secondarySidebarElement!: HTMLDivElement
   private imageResultContainer!: HTMLDivElement
   private isGeneratingImage: boolean = false
   private currentJobId: string = ''
@@ -1311,62 +1312,65 @@ export class GameEngine {
     this.sidebarElement.style.position = 'fixed';
     this.sidebarElement.style.top = '0';
     this.sidebarElement.style.left = '0';
-    this.sidebarElement.style.width = '300px';
+    this.sidebarElement.style.width = '180px'; // 增加一级侧边栏宽度以容纳文字
     this.sidebarElement.style.height = '100%';
-    this.sidebarElement.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
-    this.sidebarElement.style.boxShadow = '2px 0 5px rgba(0, 0, 0, 0.1)';
-    this.sidebarElement.style.padding = '20px';
+    this.sidebarElement.style.backgroundColor = '#333'; // 深色背景
+    this.sidebarElement.style.boxShadow = '2px 0 5px rgba(0, 0, 0, 0.2)';
+    this.sidebarElement.style.padding = '15px 0';
     this.sidebarElement.style.overflowY = 'auto';
     this.sidebarElement.style.zIndex = '1000';
     this.sidebarElement.style.display = 'flex';
     this.sidebarElement.style.flexDirection = 'column';
+    this.sidebarElement.style.alignItems = 'center';
     this.sidebarElement.style.gap = '15px';
     document.body.appendChild(this.sidebarElement);
     
-    // 添加标题
-    const titleElement = document.createElement('h2');
-    titleElement.textContent = '混元生图';
-    titleElement.style.margin = '0 0 20px 0';
-    titleElement.style.borderBottom = '1px solid #ddd';
-    titleElement.style.paddingBottom = '10px';
-    this.sidebarElement.appendChild(titleElement);
+    // 创建二级侧边栏容器
+    const secondarySidebar = document.createElement('div');
+    secondarySidebar.style.position = 'fixed';
+    secondarySidebar.style.top = '0';
+    secondarySidebar.style.left = '180px'; // 位于一级侧边栏右侧
+    secondarySidebar.style.width = '300px';
+    secondarySidebar.style.height = '100%';
+    secondarySidebar.style.backgroundColor = 'rgba(255, 255, 255, 0.95)';
+    secondarySidebar.style.boxShadow = '2px 0 5px rgba(0, 0, 0, 0.1)';
+    secondarySidebar.style.padding = '20px';
+    secondarySidebar.style.overflowY = 'auto';
+    secondarySidebar.style.zIndex = '999';
+    secondarySidebar.style.display = 'none'; // 初始隐藏
+    secondarySidebar.style.flexDirection = 'column';
+    secondarySidebar.style.gap = '15px';
+    document.body.appendChild(secondarySidebar);
     
-    // 添加测试按钮
-    const testButton = document.createElement('button');
-    testButton.textContent = '测试替换地面纹理';
-    testButton.style.padding = '10px';
-    testButton.style.backgroundColor = '#ff9800';
-    testButton.style.color = 'white';
-    testButton.style.border = 'none';
-    testButton.style.borderRadius = '4px';
-    testButton.style.cursor = 'pointer';
-    testButton.style.marginBottom = '20px';
-    testButton.style.width = '100%';
-    testButton.onclick = () => {
-      // 使用一个本地测试图片URL
-      const testImageUrl = '/images/test-texture.jpg';
-      this.replaceGroundWithImage(testImageUrl);
+    // 保存二级侧边栏引用
+    this.secondarySidebarElement = secondarySidebar;
+    
+    // 创建背景和棋子颜色替换选项卡
+    const textureTab = this.createSidebarTab('背景和棋子颜色替换');
+    textureTab.onclick = () => {
+      this.showSecondarySidebar('texture');
     };
-    this.sidebarElement.appendChild(testButton);
+    this.sidebarElement.appendChild(textureTab);
     
-    // 创建图片生成表单
-    this.createImageGenerationForm();
-    
-    // 创建结果容器
-    this.imageResultContainer = document.createElement('div');
-    this.imageResultContainer.style.marginTop = '20px';
-    this.sidebarElement.appendChild(this.imageResultContainer);
+    // 创建棋子3D模型替换选项卡
+    const modelTab = this.createSidebarTab('棋子3D模型替换');
+    modelTab.onclick = () => {
+      this.showSecondarySidebar('model');
+    };
+    this.sidebarElement.appendChild(modelTab);
     
     // 添加关闭按钮
     const closeButton = document.createElement('button');
     closeButton.textContent = '关闭侧边栏';
     closeButton.style.marginTop = 'auto';
-    closeButton.style.padding = '8px 15px';
+    closeButton.style.padding = '10px 15px';
     closeButton.style.backgroundColor = '#f44336';
     closeButton.style.color = 'white';
     closeButton.style.border = 'none';
     closeButton.style.borderRadius = '4px';
     closeButton.style.cursor = 'pointer';
+    closeButton.style.width = '90%';
+    closeButton.style.fontSize = '14px';
     closeButton.style.transition = 'background-color 0.3s';
     closeButton.onmouseover = () => {
       closeButton.style.backgroundColor = '#d32f2f';
@@ -1376,6 +1380,7 @@ export class GameEngine {
     };
     closeButton.onclick = () => {
       this.sidebarElement.style.display = 'none';
+      this.secondarySidebarElement.style.display = 'none';
       
       // 创建一个打开按钮
       const openButton = document.createElement('button');
@@ -1404,6 +1409,141 @@ export class GameEngine {
       document.body.appendChild(openButton);
     };
     this.sidebarElement.appendChild(closeButton);
+    
+    // 创建图片生成结果容器
+    this.imageResultContainer = document.createElement('div');
+    this.imageResultContainer.style.marginTop = '20px';
+  }
+
+  // 创建侧边栏选项卡
+  private createSidebarTab(title: string): HTMLDivElement {
+    const tab = document.createElement('div');
+    tab.textContent = title;
+    tab.style.width = '90%';
+    tab.style.padding = '12px 10px';
+    tab.style.borderRadius = '4px';
+    tab.style.backgroundColor = '#555';
+    tab.style.color = 'white';
+    tab.style.display = 'flex';
+    tab.style.justifyContent = 'center';
+    tab.style.alignItems = 'center';
+    tab.style.cursor = 'pointer';
+    tab.style.fontSize = '14px';
+    tab.style.textAlign = 'center';
+    tab.style.transition = 'background-color 0.3s';
+    tab.onmouseover = () => {
+      tab.style.backgroundColor = '#777';
+    };
+    tab.onmouseout = () => {
+      tab.style.backgroundColor = '#555';
+    };
+    return tab;
+  }
+
+  // 显示二级侧边栏
+  private showSecondarySidebar(type: 'texture' | 'model'): void {
+    // 清空二级侧边栏
+    this.secondarySidebarElement.innerHTML = '';
+    this.secondarySidebarElement.style.display = 'flex';
+    
+    // 添加标题
+    const titleElement = document.createElement('h2');
+    titleElement.style.margin = '0 0 20px 0';
+    titleElement.style.borderBottom = '1px solid #ddd';
+    titleElement.style.paddingBottom = '10px';
+    titleElement.style.width = '100%';
+    
+    if (type === 'texture') {
+      titleElement.textContent = '背景和棋子颜色替换';
+      this.secondarySidebarElement.appendChild(titleElement);
+      
+      // 添加测试按钮
+      const testButton = document.createElement('button');
+      testButton.textContent = '测试替换地面纹理';
+      testButton.style.padding = '10px';
+      testButton.style.backgroundColor = '#ff9800';
+      testButton.style.color = 'white';
+      testButton.style.border = 'none';
+      testButton.style.borderRadius = '4px';
+      testButton.style.cursor = 'pointer';
+      testButton.style.marginBottom = '20px';
+      testButton.style.width = '100%';
+      testButton.onclick = () => {
+        // 使用一个本地测试图片URL
+        const testImageUrl = '/images/test-texture.jpg';
+        // 传递一个默认主题
+        this.replaceGroundWithImage(testImageUrl, '测试主题');
+      };
+      this.secondarySidebarElement.appendChild(testButton);
+      
+      // 创建图片生成表单
+      this.createImageGenerationForm();
+      
+      // 添加结果容器到二级侧边栏
+      this.secondarySidebarElement.appendChild(this.imageResultContainer);
+    } else if (type === 'model') {
+      titleElement.textContent = '棋子3D模型替换';
+      this.secondarySidebarElement.appendChild(titleElement);
+      
+      // 添加提示信息
+      const infoElement = document.createElement('div');
+      infoElement.textContent = '棋子3D模型替换功能即将推出，敬请期待！';
+      infoElement.style.padding = '20px';
+      infoElement.style.backgroundColor = '#f5f5f5';
+      infoElement.style.borderRadius = '4px';
+      infoElement.style.textAlign = 'center';
+      infoElement.style.color = '#666';
+      infoElement.style.fontSize = '14px';
+      this.secondarySidebarElement.appendChild(infoElement);
+      
+      // 添加占位图片
+      const placeholderImage = document.createElement('img');
+      placeholderImage.src = '/images/model-placeholder.png';
+      placeholderImage.alt = '棋子3D模型示例';
+      placeholderImage.style.width = '100%';
+      placeholderImage.style.marginTop = '20px';
+      placeholderImage.style.borderRadius = '4px';
+      placeholderImage.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.1)';
+      placeholderImage.onerror = () => {
+        // 如果图片加载失败，显示占位符
+        placeholderImage.style.display = 'none';
+        const fallbackElement = document.createElement('div');
+        fallbackElement.style.width = '100%';
+        fallbackElement.style.height = '200px';
+        fallbackElement.style.backgroundColor = '#e0e0e0';
+        fallbackElement.style.display = 'flex';
+        fallbackElement.style.justifyContent = 'center';
+        fallbackElement.style.alignItems = 'center';
+        fallbackElement.style.borderRadius = '4px';
+        fallbackElement.style.marginTop = '20px';
+        fallbackElement.textContent = '3D模型预览';
+        this.secondarySidebarElement.appendChild(fallbackElement);
+      };
+      this.secondarySidebarElement.appendChild(placeholderImage);
+    }
+    
+    // 添加关闭按钮
+    const closeSecondaryButton = document.createElement('button');
+    closeSecondaryButton.textContent = '关闭';
+    closeSecondaryButton.style.marginTop = '20px';
+    closeSecondaryButton.style.padding = '8px 15px';
+    closeSecondaryButton.style.backgroundColor = '#f44336';
+    closeSecondaryButton.style.color = 'white';
+    closeSecondaryButton.style.border = 'none';
+    closeSecondaryButton.style.borderRadius = '4px';
+    closeSecondaryButton.style.cursor = 'pointer';
+    closeSecondaryButton.style.alignSelf = 'flex-end';
+    closeSecondaryButton.style.transition = 'background-color 0.3s';
+    closeSecondaryButton.onmouseover = () => {
+      closeSecondaryButton.style.backgroundColor = '#d32f2f';
+    };
+    closeSecondaryButton.onmouseout = () => {
+      closeSecondaryButton.style.backgroundColor = '#f44336';
+    };
+    closeSecondaryButton.onclick = () => {
+      this.secondarySidebarElement.style.display = 'none';
+    };
+    this.secondarySidebarElement.appendChild(closeSecondaryButton);
   }
 
   // 创建图片生成表单
@@ -1412,6 +1552,7 @@ export class GameEngine {
     form.style.display = 'flex';
     form.style.flexDirection = 'column';
     form.style.gap = '15px';
+    form.style.width = '100%';
     
     // 添加提示词输入
     this.addFormField(form, 'prompt', '提示词', '一只可爱的卡通猫咪，在阳光明媚的草地上玩耍', 'textarea');
@@ -1476,22 +1617,19 @@ export class GameEngine {
     ];
     this.addFormSelect(form, 'clarity', '超分选项', clarityOptions);
     
-    // 添加prompt扩写开关
+    // 添加提示词扩写选项
     const reviseOptions = [
-      { value: '1', label: '开启 (推荐)' },
-      { value: '0', label: '关闭' }
+      { value: 'false', label: '不扩写' },
+      { value: 'true', label: '扩写提示词' }
     ];
-    this.addFormSelect(form, 'revise', 'Prompt扩写', reviseOptions);
+    this.addFormSelect(form, 'revise', '提示词扩写', reviseOptions);
     
-    // 添加水印开关
+    // 添加水印选项
     const logoAddOptions = [
-      { value: '0', label: '不添加 (默认)' },
-      { value: '1', label: '添加' }
+      { value: 'false', label: '不添加水印' },
+      { value: 'true', label: '添加水印' }
     ];
-    this.addFormSelect(form, 'logoAdd', '水印', logoAddOptions);
-    
-    // 添加自定义水印参数
-    this.addFormField(form, 'logoParam', '自定义水印 (可选)', '');
+    this.addFormSelect(form, 'logoAdd', '添加水印', logoAddOptions);
     
     // 添加提交按钮
     const submitButton = document.createElement('button');
@@ -1536,7 +1674,7 @@ export class GameEngine {
       this.submitImageGenerationJob(data, submitButton);
     };
     
-    this.sidebarElement.appendChild(form);
+    this.secondarySidebarElement.appendChild(form);
   }
   
   // 添加表单字段
@@ -1545,6 +1683,7 @@ export class GameEngine {
     fieldContainer.style.display = 'flex';
     fieldContainer.style.flexDirection = 'column';
     fieldContainer.style.gap = '5px';
+    fieldContainer.style.width = '100%';
     
     const labelElement = document.createElement('label');
     labelElement.textContent = label;
@@ -1563,7 +1702,13 @@ export class GameEngine {
       textarea.style.borderRadius = '4px';
       textarea.style.border = '1px solid #ddd';
       textarea.style.resize = 'vertical';
+      textarea.style.width = '100%';
       fieldContainer.appendChild(textarea);
+      
+      // 如果是提示词输入框，保存引用
+      if (name === 'prompt') {
+        this.evolveInputElement = textarea as unknown as HTMLInputElement;
+      }
     } else {
       const input = document.createElement('input');
       input.type = type;
@@ -1573,18 +1718,20 @@ export class GameEngine {
       input.style.padding = '8px';
       input.style.borderRadius = '4px';
       input.style.border = '1px solid #ddd';
+      input.style.width = '100%';
       fieldContainer.appendChild(input);
     }
     
     form.appendChild(fieldContainer);
   }
   
-  // 添加下拉选择框
+  // 添加表单选择字段
   private addFormSelect(form: HTMLFormElement, name: string, label: string, options: { value: string, label: string }[]): void {
     const fieldContainer = document.createElement('div');
     fieldContainer.style.display = 'flex';
     fieldContainer.style.flexDirection = 'column';
     fieldContainer.style.gap = '5px';
+    fieldContainer.style.width = '100%';
     
     const labelElement = document.createElement('label');
     labelElement.textContent = label;
@@ -1599,6 +1746,7 @@ export class GameEngine {
     select.style.padding = '8px';
     select.style.borderRadius = '4px';
     select.style.border = '1px solid #ddd';
+    select.style.width = '100%';
     
     options.forEach(option => {
       const optionElement = document.createElement('option');
@@ -1788,6 +1936,9 @@ export class GameEngine {
       imagesContainer.style.flexDirection = 'column';
       imagesContainer.style.gap = '15px';
       
+      // 获取原始提示词作为主题
+      const theme = result.Prompt || '';
+      
       result.ResultImage.forEach((imageUrl: string, index: number) => {
         const imageContainer = document.createElement('div');
         imageContainer.style.display = 'flex';
@@ -1822,8 +1973,8 @@ export class GameEngine {
           replaceButton.style.backgroundColor = '#4CAF50';
         };
         replaceButton.onclick = () => {
-          // 直接调用替换方法
-          this.replaceGroundWithImage(imageUrl);
+          // 直接调用替换方法，传递主题
+          this.replaceGroundWithImage(imageUrl, theme);
           
           // 添加替换成功提示
           const successMessage = document.createElement('div');
@@ -1874,10 +2025,87 @@ export class GameEngine {
     }
   }
   
+  // 根据主题生成颜色
+  private generateColorFromTheme(theme: string): number {
+    // 主题关键词与颜色映射
+    const themeColorMap: Record<string, number[]> = {
+      // 自然/风景相关
+      '自然': [0x4CAF50, 0x8BC34A, 0x009688, 0x3F51B5, 0x00BCD4],
+      '森林': [0x2E7D32, 0x388E3C, 0x43A047, 0x4CAF50, 0x66BB6A],
+      '海洋': [0x0288D1, 0x039BE5, 0x03A9F4, 0x29B6F6, 0x4FC3F7],
+      '天空': [0x1976D2, 0x1E88E5, 0x2196F3, 0x42A5F5, 0x64B5F6],
+      '沙漠': [0xD84315, 0xE64A19, 0xF4511E, 0xF57C00, 0xFB8C00],
+      '雪景': [0xB0BEC5, 0xCFD8DC, 0xECEFF1, 0xE0E0E0, 0xEEEEEE],
+      
+      // 情感/抽象相关
+      '快乐': [0xFFEB3B, 0xFFC107, 0xFF9800, 0xFFECB3, 0xFFE082],
+      '悲伤': [0x5C6BC0, 0x7986CB, 0x9FA8DA, 0x7E57C2, 0x9575CD],
+      '愤怒': [0xE53935, 0xF44336, 0xEF5350, 0xE57373, 0xEF9A9A],
+      '平静': [0x80DEEA, 0x4DD0E1, 0x26C6DA, 0x00ACC1, 0x00BCD4],
+      '神秘': [0x4A148C, 0x6A1B9A, 0x7B1FA2, 0x8E24AA, 0x9C27B0],
+      
+      // 时间相关
+      '黎明': [0xFFB74D, 0xFFA726, 0xFF9800, 0xFB8C00, 0xF57C00],
+      '黄昏': [0xFF7043, 0xFF5722, 0xF4511E, 0xE64A19, 0xD84315],
+      '夜晚': [0x1A237E, 0x283593, 0x303F9F, 0x3949AB, 0x3F51B5],
+      
+      // 季节相关
+      '春天': [0x8BC34A, 0x9CCC65, 0xAED581, 0xC5E1A5, 0xDCEDC8],
+      '夏天': [0x00BCD4, 0x26C6DA, 0x4DD0E1, 0x80DEEA, 0xB2EBF2],
+      '秋天': [0xFF9800, 0xFFA726, 0xFFB74D, 0xFFCC80, 0xFFE0B2],
+      '冬天': [0x90CAF9, 0x64B5F6, 0x42A5F5, 0x2196F3, 0x1E88E5]
+    };
+    
+    // 默认颜色（如果没有匹配的主题）
+    const defaultColors = [0x3F51B5, 0x2196F3, 0x03A9F4, 0x00BCD4, 0x009688, 0x4CAF50, 0x8BC34A, 0xCDDC39, 0xFFEB3B, 0xFFC107, 0xFF9800, 0xFF5722];
+    
+    // 将主题转换为小写并去除空格，以便更好地匹配
+    const normalizedTheme = theme.toLowerCase().trim();
+    
+    // 查找匹配的主题关键词
+    let matchedColors: number[] | undefined;
+    
+    for (const [key, colors] of Object.entries(themeColorMap)) {
+      if (normalizedTheme.includes(key.toLowerCase())) {
+        matchedColors = colors;
+        break;
+      }
+    }
+    
+    // 如果没有匹配的主题，使用默认颜色
+    const colorsToUse = matchedColors || defaultColors;
+    
+    // 随机选择一个颜色
+    return colorsToUse[Math.floor(Math.random() * colorsToUse.length)];
+  }
+  
   // 用生成的图片替换地面
-  private replaceGroundWithImage(imageUrl: string): void {
+  private replaceGroundWithImage(imageUrl: string, theme?: string): void {
     // 添加调试日志
     console.log('开始加载图片纹理，URL:', imageUrl);
+    
+    // 获取当前的生图主题（从输入框中或参数中）
+    let themeInput = '';
+    
+    // 首先尝试从参数中获取主题
+    if (theme) {
+      themeInput = theme;
+    } 
+    // 如果没有参数，尝试从输入框中获取
+    else if (this.evolveInputElement && this.evolveInputElement.value) {
+      themeInput = this.evolveInputElement.value;
+    }
+    // 如果都没有，使用默认主题
+    else {
+      // 使用一些默认主题关键词
+      const defaultThemes = ['自然', '海洋', '森林', '天空', '城市', '科技', '幻想'];
+      themeInput = defaultThemes[Math.floor(Math.random() * defaultThemes.length)];
+      console.log('使用随机默认主题:', themeInput);
+    }
+    
+    // 根据主题生成颜色
+    const generatedColor = this.generateColorFromTheme(themeInput);
+    console.log('根据主题生成的颜色:', generatedColor.toString(16));
     
     // 检查是否是外部URL，如果是则使用代理
     let processedImageUrl = imageUrl;
@@ -1973,6 +2201,9 @@ export class GameEngine {
         this.scene.add(ground);
         this.ground = ground;
         
+        // 更新棋子颜色
+        this.updatePlayerColor(generatedColor);
+        
         console.log('地面已替换为生成的图片', ground);
         
         // 强制更新渲染
@@ -2001,18 +2232,24 @@ export class GameEngine {
         
         // 2秒后移除成功提示
         setTimeout(() => {
-          document.body.removeChild(successElement);
+          if (document.body.contains(successElement)) {
+            document.body.removeChild(successElement);
+          }
         }, 2000);
       },
-      (progress) => {
-        // 添加进度回调
-        console.log('纹理加载进度:', progress);
-        loadingElement.textContent = `正在加载纹理... ${Math.round(progress.loaded / progress.total * 100)}%`;
+      // 加载进度回调
+      (xhr) => {
+        const percent = Math.round((xhr.loaded / xhr.total) * 100);
+        loadingElement.textContent = `正在加载纹理... ${percent}%`;
       },
+      // 加载错误回调
       (error) => {
-        console.error('加载图片纹理失败:', error);
+        console.error('纹理加载失败:', error);
+        
         // 移除加载提示
-        document.body.removeChild(loadingElement);
+        if (document.body.contains(loadingElement)) {
+          document.body.removeChild(loadingElement);
+        }
         
         // 显示错误提示
         const errorElement = document.createElement('div');
@@ -2027,11 +2264,47 @@ export class GameEngine {
         errorElement.style.zIndex = '1000';
         document.body.appendChild(errorElement);
         
+        // 仍然更新棋子颜色，即使纹理加载失败
+        this.updatePlayerColor(generatedColor);
+        
         // 2秒后移除错误提示
         setTimeout(() => {
-          document.body.removeChild(errorElement);
+          if (document.body.contains(errorElement)) {
+            document.body.removeChild(errorElement);
+          }
         }, 2000);
       }
     );
+  }
+
+  // 更新棋子颜色
+  private updatePlayerColor(color: number): void {
+    // 获取棋子的身体和悬浮球
+    const playerMesh = this.player.getMesh();
+    
+    // 遍历棋子的所有子对象
+    playerMesh.traverse((child) => {
+      if (child instanceof THREE.Mesh && child.material) {
+        // 创建新材质以替换旧材质
+        const oldMaterial = child.material as THREE.MeshPhongMaterial;
+        
+        // 创建新材质，保留原有的其他属性
+        const newMaterial = new THREE.MeshPhongMaterial({
+          color: color,
+          shininess: oldMaterial.shininess,
+          specular: oldMaterial.specular,
+          emissive: oldMaterial.emissive,
+          flatShading: oldMaterial.flatShading
+        });
+        
+        // 替换材质
+        child.material = newMaterial;
+        
+        // 确保材质更新
+        newMaterial.needsUpdate = true;
+      }
+    });
+    
+    console.log('棋子颜色已更新为:', color.toString(16));
   }
 } 

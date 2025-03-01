@@ -87,7 +87,7 @@ app.post('/api/submit-image-job', async (req, res) => {
     // 构建API参数
     const params = {
       Prompt: prompt,
-      LogoAdd: 0, // 默认不添加水印
+      LogoAdd: logoAdd === 'true' ? 1 : 0, // 确保LogoAdd始终有值，并转换为数字
     };
 
     // 添加可选参数（如果提供了的话）
@@ -97,9 +97,10 @@ app.post('/api/submit-image-job', async (req, res) => {
     if (num) params.Num = parseInt(num);
     if (seed) params.Seed = parseInt(seed);
     if (clarity) params.Clarity = clarity;
-    if (revise !== undefined) params.Revise = parseInt(revise);
-    if (logoAdd !== undefined) params.LogoAdd = parseInt(logoAdd);
+    if (revise !== undefined) params.Revise = revise === 'true' ? 1 : 0;
     if (logoParam) params.LogoParam = logoParam;
+
+    console.log('提交的参数:', params);
 
     // 调用API提交任务
     const data = await client.SubmitHunyuanImageJob(params);
