@@ -127,11 +127,6 @@ npm install -D prettier
 
 ## 项目结构规范
 
-### 1. 目录命名
-- 全小写
-- 使用连字符分隔
-- 清晰表达目录用途
-
 ### 2. 文件命名
 - 组件：PascalCase
 - 工具函数：camelCase

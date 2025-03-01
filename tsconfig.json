@@ -3,13 +3,14 @@
     "target": "ES2020",
     "useDefineForClassFields": true,
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
-    "module": "ESNext",
+    "forceConsistentCasingInFileNames": true,
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
     "skipLibCheck": true,
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "noEmit": true,
+    "allowImportingTsExtensions": false,
+    "noEmit": false,
     "jsx": "react-jsx",
     "strict": true,
     "noUnusedLocals": true,
@@ -19,11 +20,10 @@
     "paths": {
       "@/*": ["src/*"]
     },
-    "module": "commonjs",
     "esModuleInterop": true,
     "outDir": "./dist"
   },
-  "include": ["src/**/*"],
+  "include": ["src/**/*", "3DplayerGenerate/**/*"],
   "exclude": ["node_modules"],
   "references": [{ "path": "./tsconfig.node.json" }]
 } 

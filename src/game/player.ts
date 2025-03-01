@@ -37,6 +37,9 @@ export class Player {
   private flipAxis: THREE.Vector3 = new THREE.Vector3(1, 0, 0) // 默认绕X轴翻转
   private initialRotation: THREE.Quaternion = new THREE.Quaternion()
 
+  // 添加自定义模型属性
+  private customModel: THREE.Object3D | null = null
+
   constructor() {
     this.mesh = new THREE.Group()
 
@@ -83,27 +86,90 @@ export class Player {
 
   // 更新碰撞边界
   private updateBoundingBox(): void {
-    // 获取body的世界位置
-    const worldPosition = new THREE.Vector3()
-    this.body.getWorldPosition(worldPosition)
+    // 创建新的边界盒
+    this.boundingBox = new THREE.Box3();
     
-    // 获取body的当前缩放
-    const scale = this.body.scale.y
+    if (this.customModel) {
+      // 如果有自定义模型，使用自定义模型的边界
+      this.boundingBox.setFromObject(this.mesh);
+      
+      // 确保边界盒有一定的高度和宽度
+      const size = new THREE.Vector3();
+      this.boundingBox.getSize(size);
+      
+      // 获取边界盒的中心点
+      const center = new THREE.Vector3();
+      this.boundingBox.getCenter(center);
+      
+      // 如果边界盒太小，设置一个最小尺寸
+      const minSize = 0.5;
+      if (size.x < minSize || size.y < minSize || size.z < minSize) {
+        console.log('边界盒太小，设置最小尺寸');
+        this.boundingBox.set(
+          new THREE.Vector3(center.x - minSize/2, center.y - minSize/2, center.z - minSize/2),
+          new THREE.Vector3(center.x + minSize/2, center.y + minSize/2, center.z + minSize/2)
+        );
+      }
+      
+      // 打印边界盒详细信息
+      console.log('自定义模型边界盒详情:', {
+        min: {
+          x: this.boundingBox.min.x.toFixed(2),
+          y: this.boundingBox.min.y.toFixed(2),
+          z: this.boundingBox.min.z.toFixed(2)
+        },
+        max: {
+          x: this.boundingBox.max.x.toFixed(2),
+          y: this.boundingBox.max.y.toFixed(2),
+          z: this.boundingBox.max.z.toFixed(2)
+        },
+        center: {
+          x: center.x.toFixed(2),
+          y: center.y.toFixed(2),
+          z: center.z.toFixed(2)
+        },
+        size: {
+          x: size.x.toFixed(2),
+          y: size.y.toFixed(2),
+          z: size.z.toFixed(2)
+        }
+      });
+    } else {
+      // 使用默认棋子的边界
+      // 计算身体的边界
+      const bodyBoundingBox = new THREE.Box3().setFromObject(this.body);
+      this.boundingBox.union(bodyBoundingBox);
+      
+      // 计算悬浮球的边界
+      const ballBoundingBox = new THREE.Box3().setFromObject(this.floatingBall);
+      this.boundingBox.union(ballBoundingBox);
+      
+      // 打印默认棋子边界盒信息
+      console.log('默认棋子边界盒详情:', {
+        min: {
+          x: this.boundingBox.min.x.toFixed(2),
+          y: this.boundingBox.min.y.toFixed(2),
+          z: this.boundingBox.min.z.toFixed(2)
+        },
+        max: {
+          x: this.boundingBox.max.x.toFixed(2),
+          y: this.boundingBox.max.y.toFixed(2),
+          z: this.boundingBox.max.z.toFixed(2)
+        }
+      });
+    }
     
-    // 计算边界框的大小（考虑缩放）
-    const size = new THREE.Vector3(0.8, 1.2 * scale, 0.8)
+    // 更新边界盒辅助对象
+    if (this.boundingBoxHelper) {
+      this.boundingBoxHelper.box = this.boundingBox;
+    } else {
+      this.boundingBoxHelper = new THREE.Box3Helper(this.boundingBox, 0xffff00);
+    }
     
-    // 设置边界框的最小点和最大点
-    this.boundingBox.min.set(
-      worldPosition.x - size.x/2,
-      worldPosition.y - size.y/2,
-      worldPosition.z - size.z/2
-    )
-    this.boundingBox.max.set(
-      worldPosition.x + size.x/2,
-      worldPosition.y + size.y/2,
-      worldPosition.z + size.z/2
-    )
+    // 打印边界盒信息
+    const size = new THREE.Vector3();
+    this.boundingBox.getSize(size);
+    console.log('更新边界盒，尺寸:', size);
   }
 
   // 获取碰撞边界
@@ -119,6 +185,16 @@ export class Player {
 
   // 更新悬浮球动画
   public update(deltaTime: number): void {
+    // 如果使用自定义模型，不需要更新悬浮球动画
+    if (this.customModel) {
+      // 只更新自定义模型的动画
+      if (this.isJumping || this.isFalling) {
+        // 已有的跳跃和下落逻辑保持不变
+      }
+      return;
+    }
+    
+    // 原有的更新逻辑
     this.ballAnimationTime += deltaTime
     const floatingOffset = Math.sin(this.ballAnimationTime * 2) * 0.1
     this.floatingBall.position.y = 1.6 + this.initialBallHeight + floatingOffset
@@ -328,10 +404,16 @@ export class Player {
 
   // 缩放动画（按压效果）
   public scale(scale: number): void {
-    this.body.scale.y = 1
-    this.floatingBall.position.y = 1.6 + this.initialBallHeight * scale
-    this.floatingBall.scale.y = scale
-    this.updateBoundingBox()
+    if (this.customModel) {
+      // 对自定义模型应用Y轴缩放
+      this.mesh.scale.y = scale;
+    } else {
+      // 原始棋子模型的缩放
+      this.body.scale.y = 1;
+      this.floatingBall.position.y = 1.6 + this.initialBallHeight * scale;
+      this.floatingBall.scale.y = scale;
+    }
+    this.updateBoundingBox();
   }
 
   public startCharging(): void {
@@ -440,5 +522,67 @@ export class Player {
     
     // 重置之前的旋转，保留Y轴旋转角度（朝向）
     this.mesh.rotation.set(0, this.mesh.rotation.y, 0)
+  }
+
+  // 获取当前自定义模型
+  public getCustomModel(): THREE.Object3D | null {
+    return this.customModel;
+  }
+
+  // 设置自定义3D模型
+  public setCustomModel(model: THREE.Object3D): void {
+    try {
+      // 保存当前位置和旋转
+      const currentPosition = this.mesh.position.clone();
+      const currentRotation = this.mesh.rotation.clone();
+      const currentScale = this.mesh.scale.clone();
+      
+      // 移除旧模型的所有子对象
+      while (this.mesh.children.length > 0) {
+        this.mesh.remove(this.mesh.children[0]);
+      }
+      
+      // 清除之前的自定义模型引用
+      if (this.customModel) {
+        // 如果之前有自定义模型，确保它不再被引用
+        this.customModel = null;
+      }
+      
+      // 保存新的自定义模型引用
+      this.customModel = model;
+      
+      // 如果模型是Group类型，我们将其子对象添加到当前mesh
+      if (model instanceof THREE.Group) {
+        // 复制所有子对象到当前mesh
+        model.children.forEach(child => {
+          this.mesh.add(child.clone());
+        });
+      } else {
+        // 如果不是Group，直接添加整个模型
+        this.mesh.add(model.clone());
+      }
+      
+      // 恢复位置和旋转，但保留模型的 Y 轴位置
+      const originalY = model.position.y;
+      this.mesh.position.set(currentPosition.x, originalY, currentPosition.z);
+      this.mesh.rotation.copy(currentRotation);
+      this.mesh.scale.copy(currentScale);
+      
+      // 确保模型可见
+      this.mesh.visible = true;
+      
+      // 更新碰撞盒
+      this.updateBoundingBox();
+      
+      // 重置状态
+      this.isJumping = false;
+      this.isCharging = false;
+      this.isFalling = false;
+      this.isFlipping = false;
+      
+      console.log('棋子模型已替换为自定义3D模型，子对象数量:', this.mesh.children.length);
+    } catch (error) {
+      console.error('设置自定义模型时出错:', error);
+    }
   }
 } 

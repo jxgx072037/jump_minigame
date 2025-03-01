@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# 忽略models目录中的所有文件，但保留目录本身
+models/*
+!models/.gitkeep

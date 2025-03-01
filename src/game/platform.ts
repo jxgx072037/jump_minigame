@@ -184,6 +184,18 @@ export class Platform {
     return this.isFalling
   }
 
+  // 停止平台下落
+  public stopFalling(): void {
+    this.isFalling = false
+    this.velocity = 0
+    // 确保平台不会低于地面
+    if (this.mesh.position.y < 0) {
+      this.mesh.position.y = 0
+    }
+    // 更新碰撞边界
+    this.updateBoundingBox()
+  }
+
   // 检查一个点是否在平台上
   public isPointOnPlatform(point: THREE.Vector3): boolean {
     const platformPos = this.getPosition()

@@ -4,6 +4,7 @@ import { Platform } from './platform'
 import { Player } from './player'
 import { ParticleSystem } from './particles'
 import { AudioManager } from './audio'
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 
 // 静态属性声明
 export class GameEngine {
@@ -61,6 +62,8 @@ export class GameEngine {
   private isGeneratingImage: boolean = false
   private currentJobId: string = ''
   private checkStatusInterval: number = 0
+  private is3DModelGenerating: boolean = false // 添加3D模型生成状态标志
+  private model3DCheckInterval: number = 0 // 添加3D模型检查间隔ID
 
   private currentPlatformIndex: number = 0
   private targetPlatformIndex: number = 1
@@ -385,6 +388,9 @@ export class GameEngine {
     // 添加窗口大小变化监听
     window.addEventListener('resize', this.onWindowResize.bind(this))
 
+    // 添加页面可见性变化监听
+    document.addEventListener('visibilitychange', this.handleVisibilityChange.bind(this))
+
     // 如果游戏已经开始，添加交互事件监听器
     if (this.isGameStarted) {
       console.log(`[DEBUG] 实例 ${this.instanceId}: 初始化时游戏已开始，添加事件监听器`);
@@ -483,6 +489,9 @@ export class GameEngine {
     
     // 移除窗口大小变化监听
     window.removeEventListener('resize', this.onWindowResize.bind(this));
+    
+    // 移除页面可见性变化监听
+    document.removeEventListener('visibilitychange', this.handleVisibilityChange.bind(this));
     
     // 停止动画循环 - 修复类型错误
     const animationId = requestAnimationFrame(this.animate.bind(this));
@@ -748,6 +757,32 @@ export class GameEngine {
     this.camera.aspect = container.clientWidth / container.clientHeight
     this.camera.updateProjectionMatrix()
     this.renderer.setSize(container.clientWidth, container.clientHeight)
+  }
+
+  // 处理页面可见性变化
+  private handleVisibilityChange(): void {
+    if (document.visibilityState === 'hidden') {
+      console.log('[DEBUG] 页面不可见，保存游戏状态');
+      // 页面不可见时，可以保存当前游戏状态
+      // 这里不需要做特殊处理，因为游戏状态已经保存在实例中
+    } else if (document.visibilityState === 'visible') {
+      console.log('[DEBUG] 页面重新可见，恢复游戏状态');
+      
+      // 如果游戏已经开始且没有结束，重新初始化平台位置
+      if (this.isGameStarted && !this.isGameOver) {
+        // 重新设置所有平台的位置，确保它们不会重新下落
+        this.platforms.forEach(platform => {
+          // 如果平台正在下落中，停止其下落
+          if (platform.isStillFalling()) {
+            platform.stopFalling();
+            console.log('[DEBUG] 停止平台下落');
+          }
+        });
+        
+        // 如果玩家正在跳跃中，可能需要重置玩家状态
+        // 这里不做处理，让玩家自然完成当前动作
+      }
+    }
   }
 
   private updateScore(newScore: number): void {
@@ -1485,41 +1520,101 @@ export class GameEngine {
       titleElement.textContent = '棋子3D模型替换';
       this.secondarySidebarElement.appendChild(titleElement);
       
-      // 添加提示信息
-      const infoElement = document.createElement('div');
-      infoElement.textContent = '棋子3D模型替换功能即将推出，敬请期待！';
-      infoElement.style.padding = '20px';
-      infoElement.style.backgroundColor = '#f5f5f5';
-      infoElement.style.borderRadius = '4px';
-      infoElement.style.textAlign = 'center';
-      infoElement.style.color = '#666';
-      infoElement.style.fontSize = '14px';
-      this.secondarySidebarElement.appendChild(infoElement);
+      // 创建3D模型生成表单
+      const form = document.createElement('form');
+      form.style.display = 'flex';
+      form.style.flexDirection = 'column';
+      form.style.gap = '15px';
+      form.style.width = '100%';
       
-      // 添加占位图片
-      const placeholderImage = document.createElement('img');
-      placeholderImage.src = '/images/model-placeholder.png';
-      placeholderImage.alt = '棋子3D模型示例';
-      placeholderImage.style.width = '100%';
-      placeholderImage.style.marginTop = '20px';
-      placeholderImage.style.borderRadius = '4px';
-      placeholderImage.style.boxShadow = '0 2px 5px rgba(0, 0, 0, 0.1)';
-      placeholderImage.onerror = () => {
-        // 如果图片加载失败，显示占位符
-        placeholderImage.style.display = 'none';
-        const fallbackElement = document.createElement('div');
-        fallbackElement.style.width = '100%';
-        fallbackElement.style.height = '200px';
-        fallbackElement.style.backgroundColor = '#e0e0e0';
-        fallbackElement.style.display = 'flex';
-        fallbackElement.style.justifyContent = 'center';
-        fallbackElement.style.alignItems = 'center';
-        fallbackElement.style.borderRadius = '4px';
-        fallbackElement.style.marginTop = '20px';
-        fallbackElement.textContent = '3D模型预览';
-        this.secondarySidebarElement.appendChild(fallbackElement);
+      // 添加提示词输入
+      const promptContainer = document.createElement('div');
+      promptContainer.style.display = 'flex';
+      promptContainer.style.flexDirection = 'column';
+      promptContainer.style.gap = '5px';
+      promptContainer.style.width = '100%';
+      
+      const promptLabel = document.createElement('label');
+      promptLabel.textContent = '3D模型描述';
+      promptLabel.style.fontSize = '14px';
+      promptLabel.style.fontWeight = 'bold';
+      promptContainer.appendChild(promptLabel);
+      
+      const promptInput = document.createElement('textarea');
+      promptInput.placeholder = '例如：一个中国象棋的兵棋子';
+      promptInput.style.padding = '10px';
+      promptInput.style.borderRadius = '4px';
+      promptInput.style.border = '1px solid #ddd';
+      promptInput.style.minHeight = '80px';
+      promptInput.style.resize = 'vertical';
+      promptContainer.appendChild(promptInput);
+      
+      form.appendChild(promptContainer);
+      
+      // 添加状态显示区域
+      const statusContainer = document.createElement('div');
+      statusContainer.style.padding = '15px';
+      statusContainer.style.backgroundColor = '#f5f5f5';
+      statusContainer.style.borderRadius = '4px';
+      statusContainer.style.marginTop = '10px';
+      statusContainer.style.display = 'none';
+      form.appendChild(statusContainer);
+      
+      // 添加模型预览区域
+      const previewContainer = document.createElement('div');
+      previewContainer.style.width = '100%';
+      previewContainer.style.height = '200px';
+      previewContainer.style.backgroundColor = '#e0e0e0';
+      previewContainer.style.display = 'flex';
+      previewContainer.style.justifyContent = 'center';
+      previewContainer.style.alignItems = 'center';
+      previewContainer.style.borderRadius = '4px';
+      previewContainer.style.marginTop = '15px';
+      previewContainer.textContent = '模型预览区域';
+      previewContainer.style.display = 'none';
+      form.appendChild(previewContainer);
+      
+      // 添加提交按钮
+      const submitButton = document.createElement('button');
+      submitButton.type = 'submit';
+      submitButton.textContent = '生成3D模型';
+      submitButton.style.padding = '10px 15px';
+      submitButton.style.backgroundColor = '#4CAF50';
+      submitButton.style.color = 'white';
+      submitButton.style.border = 'none';
+      submitButton.style.borderRadius = '4px';
+      submitButton.style.cursor = 'pointer';
+      submitButton.style.marginTop = '15px';
+      submitButton.style.transition = 'background-color 0.3s';
+      submitButton.onmouseover = () => {
+        submitButton.style.backgroundColor = '#388E3C';
       };
-      this.secondarySidebarElement.appendChild(placeholderImage);
+      submitButton.onmouseout = () => {
+        submitButton.style.backgroundColor = '#4CAF50';
+      };
+      form.appendChild(submitButton);
+      
+      // 添加表单提交事件
+      form.onsubmit = (e) => {
+        e.preventDefault();
+        const prompt = promptInput.value.trim();
+        
+        if (!prompt) {
+          alert('请输入3D模型描述');
+          return;
+        }
+        
+        // 显示状态区域
+        statusContainer.style.display = 'block';
+        statusContainer.textContent = '正在提交3D模型生成任务...';
+        submitButton.disabled = true;
+        submitButton.style.backgroundColor = '#cccccc';
+        
+        // 调用3D模型生成方法
+        this.submit3DModelGeneration(prompt, statusContainer, submitButton, previewContainer);
+      };
+      
+      this.secondarySidebarElement.appendChild(form);
     }
     
     // 添加关闭按钮
@@ -2306,5 +2401,648 @@ export class GameEngine {
     });
     
     console.log('棋子颜色已更新为:', color.toString(16));
+  }
+
+  // 提交3D模型生成任务
+  private async submit3DModelGeneration(
+    prompt: string, 
+    statusContainer: HTMLDivElement, 
+    submitButton: HTMLButtonElement,
+    previewContainer: HTMLDivElement
+  ): Promise<void> {
+    try {
+      this.is3DModelGenerating = true;
+      
+      // 更新状态
+      statusContainer.textContent = '正在提交3D模型生成任务...';
+      statusContainer.style.display = 'block';
+      
+      // 调用API提交任务，使用端口3001
+      const response = await fetch('http://localhost:3001/api/3d-model/submit', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ prompt }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`提交失败: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      if (!data.task_id) {
+        throw new Error('提交成功但未返回task_id');
+      }
+      
+      // 保存任务ID和开始时间
+      this.currentJobId = data.task_id;
+      const startTime = data.start_time || Date.now();
+      
+      // 更新状态
+      statusContainer.textContent = `任务已提交，正在生成中...(任务ID: ${this.currentJobId})`;
+      
+      // 添加计时器
+      let waitTimeSeconds = 0;
+      const timerElement = document.createElement('div');
+      timerElement.style.marginTop = '10px';
+      timerElement.style.fontSize = '14px';
+      timerElement.style.color = '#666';
+      timerElement.textContent = `已等待时间: ${waitTimeSeconds}秒`;
+      statusContainer.appendChild(timerElement);
+      
+      // 启动计时器
+      const timerInterval = window.setInterval(() => {
+        waitTimeSeconds++;
+        timerElement.textContent = `已等待时间: ${waitTimeSeconds}秒`;
+      }, 1000);
+      
+      // 开始轮询任务状态
+      this.model3DCheckInterval = window.setInterval(() => {
+        this.check3DModelStatus(this.currentJobId, statusContainer, submitButton, previewContainer, startTime, timerInterval);
+      }, 10000); // 每10秒检查一次
+      
+    } catch (error) {
+      console.error('提交3D模型生成任务失败:', error);
+      statusContainer.textContent = `提交失败: ${error instanceof Error ? error.message : '未知错误'}`;
+      statusContainer.style.color = 'red';
+      
+      // 重置按钮状态
+      submitButton.disabled = false;
+      submitButton.style.backgroundColor = '#4CAF50';
+      
+      this.is3DModelGenerating = false;
+    }
+  }
+  
+  // 检查3D模型生成状态
+  private async check3DModelStatus(
+    taskId: string,
+    statusContainer: HTMLDivElement,
+    submitButton: HTMLButtonElement,
+    previewContainer: HTMLDivElement,
+    startTime: number,
+    timerInterval: number
+  ): Promise<void> {
+    try {
+      // 调用API检查任务状态，使用端口3001，并传递开始时间
+      const response = await fetch('http://localhost:3001/api/3d-model/status', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+          task_id: taskId,
+          start_time: startTime
+        }),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`检查状态失败: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // 更新状态显示
+      let statusText = `任务状态: ${this.translate3DModelStatus(data.status)}`;
+      
+      // 如果服务器返回了等待时间，显示服务器计算的等待时间
+      if (data.wait_time !== undefined && data.wait_time !== null) {
+        statusText += ` (已等待: ${data.wait_time}秒)`;
+      }
+      
+      // 更新状态文本，但保留计时器元素
+      const timerElement = statusContainer.querySelector('div');
+      statusContainer.textContent = statusText;
+      if (timerElement) {
+        statusContainer.appendChild(timerElement);
+      }
+      
+      if (data.status === 'succeeded') {
+        // 任务成功完成
+        clearInterval(this.model3DCheckInterval);
+        clearInterval(timerInterval); // 停止计时器
+        
+        statusContainer.textContent = '3D模型生成成功！正在加载...';
+        
+        // 如果有数据，加载模型
+        if (data.data && data.data.length > 0) {
+          const modelData = data.data[0];
+          
+          // 保存状态容器的引用，用于在模型加载成功后更新状态
+          const statusContainerRef = statusContainer;
+          
+          // 优先使用GLB文件
+          if (modelData.glb_url) {
+            this.load3DModelAndReplace(modelData.glb_url, statusContainerRef);
+            
+            // 显示预览图
+            if (modelData.gif_url) {
+              previewContainer.innerHTML = '';
+              const previewImg = document.createElement('img');
+              previewImg.src = modelData.gif_url;
+              previewImg.style.width = '100%';
+              previewImg.style.height = 'auto';
+              previewImg.style.borderRadius = '4px';
+              previewContainer.appendChild(previewImg);
+            }
+          } 
+          // 如果没有GLB文件，尝试使用OBJ文件
+          else if (modelData.obj_url) {
+            this.load3DModelAndReplace(modelData.obj_url, statusContainerRef);
+            
+            // 显示预览图
+            if (modelData.gif_url) {
+              previewContainer.innerHTML = '';
+              const previewImg = document.createElement('img');
+              previewImg.src = modelData.gif_url;
+              previewImg.style.width = '100%';
+              previewImg.style.height = 'auto';
+              previewImg.style.borderRadius = '4px';
+              previewContainer.appendChild(previewImg);
+            }
+          } else {
+            statusContainer.textContent = '3D模型生成成功，但未返回可用的模型文件';
+            statusContainer.style.color = 'orange';
+          }
+        } else {
+          statusContainer.textContent = '3D模型生成成功，但未返回数据';
+          statusContainer.style.color = 'orange';
+        }
+        
+        // 重置按钮状态
+        submitButton.disabled = false;
+        submitButton.style.backgroundColor = '#4CAF50';
+        
+        this.is3DModelGenerating = false;
+      } else if (data.status === 'failed' || data.status === 'cancelled') {
+        // 任务失败或被取消
+        clearInterval(this.model3DCheckInterval);
+        clearInterval(timerInterval); // 停止计时器
+        
+        statusContainer.textContent = `任务${data.status === 'failed' ? '失败' : '被取消'}`;
+        if (data.wait_time) {
+          statusContainer.textContent += ` (总耗时: ${data.wait_time}秒)`;
+        }
+        statusContainer.style.color = 'red';
+        
+        // 重置按钮状态
+        submitButton.disabled = false;
+        submitButton.style.backgroundColor = '#4CAF50';
+        
+        this.is3DModelGenerating = false;
+      }
+      // 其他状态继续轮询
+      
+    } catch (error) {
+      console.error('检查3D模型生成状态失败:', error);
+      statusContainer.textContent = `检查状态失败: ${error instanceof Error ? error.message : '未知错误'}`;
+      
+      // 不要在这里停止轮询，让它继续尝试
+    }
+  }
+  
+  // 翻译3D模型生成状态
+  private translate3DModelStatus(status: string): string {
+    switch (status) {
+      case 'pending':
+        return '等待中';
+      case 'running':
+        return '生成中';
+      case 'succeeded':
+        return '已完成';
+      case 'failed':
+        return '失败';
+      case 'cancelled':
+        return '已取消';
+      default:
+        return status;
+    }
+  }
+  
+  // 加载3D模型并替换棋子
+  private load3DModelAndReplace(objFilePath: string, statusContainerRef?: HTMLDivElement): void {
+    // 将OBJ文件路径转换为GLB文件路径
+    const glbFilePath = objFilePath.replace('.obj', '.glb');
+    console.log('开始加载3D模型(GLB):', glbFilePath);
+    
+    // 创建纹理加载器并设置跨域
+    const textureLoader = new THREE.TextureLoader();
+    textureLoader.crossOrigin = 'anonymous';
+    
+    // 检查文件是否存在
+    fetch(glbFilePath, { method: 'HEAD' })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`GLB文件不存在或无法访问: ${glbFilePath}`);
+        }
+        
+        // 文件存在，继续加载
+        return import('three/addons/loaders/GLTFLoader.js');
+      })
+      .then(({ GLTFLoader }) => {
+        // 创建GLTF加载器
+        const loader = new GLTFLoader();
+        
+        // 设置跨域请求
+        loader.setCrossOrigin('anonymous');
+        
+        // 设置资源路径
+        const resourcePath = glbFilePath.substring(0, glbFilePath.lastIndexOf('/') + 1);
+        loader.setResourcePath(resourcePath);
+        
+        // 加载GLB文件
+        loader.load(
+          glbFilePath,
+          (gltf) => {
+            try {
+              console.log('3D模型(GLB)加载成功，开始处理模型');
+              
+              // 获取模型的场景对象
+              const model = gltf.scene;
+              
+              // 检查模型是否有效
+              if (!model || !model.children || model.children.length === 0) {
+                console.error('加载的3D模型无效或为空');
+                if (statusContainerRef) {
+                  statusContainerRef.textContent = '加载的3D模型无效或为空';
+                  statusContainerRef.style.color = 'red';
+                }
+                return;
+              }
+              
+              // 修复模型 - 遍历所有网格，检查并修复几何体和材质
+              model.traverse((child) => {
+                if (child instanceof THREE.Mesh) {
+                  const mesh = child as THREE.Mesh;
+                  
+                  // 检查几何体
+                  if (mesh.geometry) {
+                    const geometry = mesh.geometry;
+                    
+                    // 检查位置属性是否存在
+                    const positionAttribute = geometry.getAttribute('position');
+                    if (positionAttribute) {
+                      const positions = positionAttribute.array;
+                      let hasNaN = false;
+                      
+                      // 检查NaN值
+                      for (let i = 0; i < positions.length; i++) {
+                        if (isNaN(positions[i])) {
+                          console.warn(`发现NaN值在位置属性中，索引: ${i}`);
+                          // 将NaN值替换为0
+                          positions[i] = 0;
+                          hasNaN = true;
+                        }
+                      }
+                      
+                      if (hasNaN) {
+                        // 标记属性需要更新
+                        positionAttribute.needsUpdate = true;
+                        console.log('已修复NaN值');
+                      }
+                    }
+                    
+                    // 重新计算边界
+                    geometry.computeBoundingBox();
+                    geometry.computeBoundingSphere();
+                  }
+                  
+                  // 处理材质
+                  if (mesh.material) {
+                    // 如果是数组材质
+                    if (Array.isArray(mesh.material)) {
+                      mesh.material.forEach((mat) => {
+                        this.fixMaterialTextures(mat);
+                      });
+                    } else {
+                      // 单个材质
+                      this.fixMaterialTextures(mesh.material);
+                    }
+                  } else {
+                    // 确保材质存在
+                    console.log('网格没有材质，添加默认材质');
+                    mesh.material = new THREE.MeshPhongMaterial({ 
+                      color: 0x1a237e,
+                      shininess: 60,
+                      specular: 0x333333
+                    });
+                  }
+                }
+              });
+              
+              // 调整模型大小和位置
+              const box = new THREE.Box3().setFromObject(model);
+              const size = box.getSize(new THREE.Vector3());
+              const center = box.getCenter(new THREE.Vector3());
+              
+              // 计算缩放因子，使模型高度约为1.5单位
+              const scale = 1.5 / Math.max(size.x, size.y, size.z);
+              model.scale.set(scale, scale, scale);
+              
+              // 重新计算边界盒以获取缩放后的尺寸
+              const scaledBox = new THREE.Box3().setFromObject(model);
+              const scaledSize = scaledBox.getSize(new THREE.Vector3());
+              
+              // 计算Y轴偏移，使模型底部与平台对齐（平台高度为1）
+              // 获取模型底部到中心的距离
+              const bottomToCenter = scaledBox.min.y;
+              console.log('模型底部到中心的距离:', bottomToCenter);
+              // 计算需要的Y轴偏移，使模型底部位于y=1（平台高度）
+              // 修改：增加平台高度，使模型立在平台上而不是埋在平台里
+              const platformHeight = 1; // 平台高度
+              
+              // 修正yOffset计算，考虑bottomToCenter可能为负值的情况
+              // 如果bottomToCenter是负值，表示模型的底部在其中心点以下
+              // 如果是正值，表示模型的底部在其中心点以上（这种情况比较少见）
+              let yOffset = 0;
+              if (bottomToCenter < 0) {
+                // 负值情况：需要向上移动模型，使底部与平台对齐
+                yOffset = platformHeight - bottomToCenter; // 这样计算会使模型底部正好位于平台表面
+              } else {
+                // 正值情况（罕见）：需要向下移动模型
+                yOffset = platformHeight - bottomToCenter;
+              }
+              
+              console.log('计算的yOffset:', yOffset);
+              
+              // 设置模型位置，确保底部与平台对齐
+              model.position.set(0, yOffset, 0);
+              
+              console.log('模型调整后信息:', {
+                scale: scale,
+                size: {
+                  x: scaledSize.x.toFixed(2),
+                  y: scaledSize.y.toFixed(2),
+                  z: scaledSize.z.toFixed(2)
+                },
+                bottomY: bottomToCenter.toFixed(2),
+                platformHeight: platformHeight,
+                yOffset: yOffset.toFixed(2),
+                finalPosition: {
+                  x: model.position.x.toFixed(2),
+                  y: model.position.y.toFixed(2),
+                  z: model.position.z.toFixed(2)
+                }
+              });
+              
+              // 使用setTimeout确保在下一帧替换模型
+              setTimeout(() => {
+                // 替换棋子模型
+                this.replacePlayerModel(model, statusContainerRef);
+                console.log('模型替换完成');
+                
+                // 更新状态栏文案
+                if (statusContainerRef) {
+                  statusContainerRef.textContent = '模型加载成功！';
+                  statusContainerRef.style.color = '#4CAF50';
+                }
+              }, 100);
+            } catch (error) {
+              console.error('处理3D模型时出错:', error);
+              if (statusContainerRef) {
+                statusContainerRef.textContent = `处理3D模型时出错: ${error instanceof Error ? error.message : '未知错误'}`;
+                statusContainerRef.style.color = 'red';
+              }
+              this.loadFallbackModel(statusContainerRef);
+            }
+          },
+          (xhr) => {
+            // 加载进度
+            console.log(`模型加载进度: ${(xhr.loaded / xhr.total * 100).toFixed(0)}%`);
+            if (statusContainerRef) {
+              statusContainerRef.textContent = `3D模型加载中: ${(xhr.loaded / xhr.total * 100).toFixed(0)}%`;
+            }
+          },
+          (error) => {
+            // 加载失败
+            console.error('加载3D模型(GLB)失败:', error);
+            if (statusContainerRef) {
+              statusContainerRef.textContent = `加载3D模型失败: ${error instanceof Error ? error.message : '未知错误'}`;
+              statusContainerRef.style.color = 'red';
+            }
+            
+            // 尝试使用备用方法加载
+            console.log('尝试使用备用方法加载模型...');
+            this.loadFallbackModel(statusContainerRef);
+          }
+        );
+      })
+      .catch(error => {
+        console.error('加载GLB文件失败:', error);
+        if (statusContainerRef) {
+          statusContainerRef.textContent = `加载GLB文件失败: ${error instanceof Error ? error.message : '未知错误'}`;
+          statusContainerRef.style.color = 'red';
+        }
+        this.loadFallbackModel(statusContainerRef);
+      });
+  }
+  
+  // 修复材质中的纹理问题
+  private fixMaterialTextures(material: THREE.Material): void {
+    if (material instanceof THREE.MeshStandardMaterial || 
+        material instanceof THREE.MeshPhysicalMaterial || 
+        material instanceof THREE.MeshPhongMaterial) {
+      
+      // 处理各种纹理
+      const textureProps = [
+        'map', 'normalMap', 'roughnessMap', 'metalnessMap', 
+        'emissiveMap', 'aoMap', 'displacementMap'
+      ];
+      
+      textureProps.forEach(prop => {
+        const texture = (material as any)[prop];
+        if (texture && texture instanceof THREE.Texture) {
+          // 设置纹理的跨域属性
+          (texture as any).crossOrigin = 'anonymous';
+          
+          // 如果纹理加载失败，使用默认纹理
+          (texture as any).onError = () => {
+            console.warn(`纹理 ${prop} 加载失败，使用默认纹理`);
+            (material as any)[prop] = null;
+            
+            // 对于基础颜色贴图，设置默认颜色
+            if (prop === 'map') {
+              material.color.set(0x1a237e);
+            }
+            
+            material.needsUpdate = true;
+          };
+        }
+      });
+    }
+  }
+  
+  // 加载备用模型
+  private loadFallbackModel(statusContainerRef?: HTMLDivElement): void {
+    console.log('加载备用模型');
+    
+    if (statusContainerRef) {
+      statusContainerRef.textContent = '使用备用模型替代...';
+      statusContainerRef.style.color = 'orange';
+    }
+    
+    // 创建一个简单的几何体作为备用
+    const geometry = new THREE.SphereGeometry(0.5, 32, 32);
+    const material = new THREE.MeshPhongMaterial({ 
+      color: 0x1a237e,
+      shininess: 60,
+      specular: 0x333333
+    });
+    
+    const fallbackModel = new THREE.Mesh(geometry, material);
+    
+    // 创建一个组来包含备用模型
+    const group = new THREE.Group();
+    group.add(fallbackModel);
+    
+    // 替换棋子模型
+    this.replacePlayerModel(group, statusContainerRef);
+    console.log('备用模型替换完成');
+    
+    // 更新状态栏文案
+    if (statusContainerRef) {
+      statusContainerRef.textContent = '已使用备用模型！';
+      statusContainerRef.style.color = '#FF9800';
+    }
+  }
+  
+  // 替换棋子模型
+  private replacePlayerModel(newModel: THREE.Object3D, statusContainerRef?: HTMLDivElement): void {
+    try {
+      if (!this.player) {
+        console.error('玩家对象不存在');
+        return;
+      }
+      
+      console.log('开始替换玩家模型');
+      
+      // 确保模型有效
+      if (!newModel) {
+        console.error('新模型无效');
+        return;
+      }
+      
+      // 确保模型有子对象
+      if (!newModel.children || newModel.children.length === 0) {
+        console.warn('新模型没有子对象，可能会导致渲染问题');
+      }
+      
+      // 设置模型的阴影属性
+      newModel.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+          
+          // 确保材质是有效的
+          if (!child.material) {
+            console.warn('网格没有材质，添加默认材质');
+            child.material = new THREE.MeshPhongMaterial({ 
+              color: 0x1a237e,
+              shininess: 60,
+              specular: 0x333333
+            });
+          }
+        }
+      });
+      
+      // 创建一个辅助对象来可视化模型的位置
+      const positionHelper = new THREE.AxesHelper(1);
+      newModel.add(positionHelper);
+      console.log('已添加坐标轴辅助器到模型');
+      
+      // 创建一个边界盒辅助对象来可视化模型的边界
+      const boundingBox = new THREE.Box3().setFromObject(newModel);
+      const boundingBoxHelper = new THREE.Box3Helper(boundingBox, new THREE.Color(0x00ff00));
+      this.scene.add(boundingBoxHelper);
+      console.log('已添加边界盒辅助器到场景');
+      
+      // 获取当前玩家位置
+      const currentPosition = this.player.getPosition();
+      console.log('当前玩家位置:', currentPosition);
+      
+      // 保存模型的原始Y轴位置
+      const originalY = newModel.position.y;
+      console.log('模型原始Y轴位置:', originalY);
+      
+      // 设置新模型位置，保留Y轴位置
+      newModel.position.set(currentPosition.x, originalY, currentPosition.z);
+      console.log('设置模型新位置:', newModel.position);
+      
+      // 确保模型可见
+      newModel.visible = true;
+      
+      // 移除旧的自定义模型（如果有）
+      const oldCustomModel = this.player.getCustomModel();
+      if (oldCustomModel) {
+        console.log('移除旧的自定义模型');
+        // 从场景中移除旧模型
+        this.scene.remove(oldCustomModel);
+      }
+      
+      // 将新模型添加到场景
+      this.scene.add(newModel);
+      console.log('新模型已添加到场景');
+      
+      // 设置玩家的自定义模型
+      this.player.setCustomModel(newModel);
+      console.log('玩家模型已更新');
+      
+      // 重置游戏状态
+      this.isPressing = false;
+      this.pressStartTime = 0;
+      
+      // 强制更新一次动画循环
+      this.animate();
+      
+      // 更新状态栏（如果提供）
+      if (statusContainerRef) {
+        statusContainerRef.innerHTML = '模型加载成功！';
+        statusContainerRef.style.color = '#4CAF50';
+      }
+      
+      // 打印模型的详细信息
+      console.log('模型详细信息:', {
+        position: {
+          x: newModel.position.x.toFixed(2),
+          y: newModel.position.y.toFixed(2),
+          z: newModel.position.z.toFixed(2)
+        },
+        scale: {
+          x: newModel.scale.x.toFixed(2),
+          y: newModel.scale.y.toFixed(2),
+          z: newModel.scale.z.toFixed(2)
+        },
+        boundingBox: {
+          min: {
+            x: boundingBox.min.x.toFixed(2),
+            y: boundingBox.min.y.toFixed(2),
+            z: boundingBox.min.z.toFixed(2)
+          },
+          max: {
+            x: boundingBox.max.x.toFixed(2),
+            y: boundingBox.max.y.toFixed(2),
+            z: boundingBox.max.z.toFixed(2)
+          },
+          size: {
+            x: (boundingBox.max.x - boundingBox.min.x).toFixed(2),
+            y: (boundingBox.max.y - boundingBox.min.y).toFixed(2),
+            z: (boundingBox.max.z - boundingBox.min.z).toFixed(2)
+          }
+        }
+      });
+      
+    } catch (error) {
+      console.error('替换玩家模型时出错:', error);
+      
+      // 加载失败时使用备用模型
+      if (statusContainerRef) {
+        statusContainerRef.innerHTML = '模型加载失败，使用备用模型';
+        statusContainerRef.style.color = '#F44336';
+      }
+      
+      this.loadFallbackModel(statusContainerRef);
+    }
   }
 } 
