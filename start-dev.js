@@ -40,26 +40,44 @@ const expressProcess = spawn('node', ['server.js'], {
   env: { ...process.env, PORT: '3001' } // 使用不同的端口避免冲突
 });
 
+// 启动图片生成服务
+const imageServiceProcess = spawn('node', ['picGenerate/imageGenerationServer.js'], {
+  stdio: 'inherit',
+  shell: true,
+  env: { ...process.env, PORT: '3002' } // 使用端口3002避免冲突
+});
+
 // 处理进程退出
 process.on('SIGINT', () => {
   console.log('正在关闭所有服务器...');
   viteProcess.kill('SIGINT');
   expressProcess.kill('SIGINT');
+  imageServiceProcess.kill('SIGINT');
   process.exit();
 });
 
 viteProcess.on('close', (code) => {
   console.log(`Vite 开发服务器已退出，退出码: ${code}`);
   expressProcess.kill('SIGINT');
+  imageServiceProcess.kill('SIGINT');
   process.exit(code);
 });
 
 expressProcess.on('close', (code) => {
   console.log(`Express 服务器已退出，退出码: ${code}`);
   viteProcess.kill('SIGINT');
+  imageServiceProcess.kill('SIGINT');
+  process.exit(code);
+});
+
+imageServiceProcess.on('close', (code) => {
+  console.log(`图片生成服务已退出，退出码: ${code}`);
+  viteProcess.kill('SIGINT');
+  expressProcess.kill('SIGINT');
   process.exit(code);
 });
 
 console.log('所有服务器已启动:');
 console.log('- Vite 开发服务器运行在默认端口 (通常是 5173)');
-console.log('- Express API 服务器运行在端口 3001'); 
+console.log('- Express API 服务器运行在端口 3001');
+console.log('- 图片生成服务运行在端口 3002'); 

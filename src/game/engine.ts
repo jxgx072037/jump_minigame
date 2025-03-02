@@ -1876,7 +1876,7 @@ export class GameEngine {
       this.imageResultContainer.appendChild(loadingElement);
       
       // 提交任务
-      const response = await fetch('http://localhost:3000/api/submit-image-job', {
+      const response = await fetch('http://localhost:3002/api/submit-image-job', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1935,7 +1935,7 @@ export class GameEngine {
   // 检查图片生成任务状态
   private async checkImageGenerationStatus(loadingElement: HTMLDivElement, submitButton: HTMLButtonElement): Promise<void> {
     try {
-      const response = await fetch(`http://localhost:3000/api/query-image-job/${this.currentJobId}`, {
+      const response = await fetch(`http://localhost:3002/api/query-image-job/${this.currentJobId}`, {
         method: 'GET',
       });
       
@@ -2204,9 +2204,9 @@ export class GameEngine {
     
     // 检查是否是外部URL，如果是则使用代理
     let processedImageUrl = imageUrl;
-    if (imageUrl.startsWith('http') && !imageUrl.includes('localhost') && !imageUrl.includes('127.0.0.1')) {
+    if (imageUrl.startsWith('http') && !imageUrl.includes('localhost')) {
       // 使用本地代理服务器转发请求，解决CORS问题
-      processedImageUrl = `http://localhost:3000/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
+      processedImageUrl = `http://localhost:3002/api/proxy-image?url=${encodeURIComponent(imageUrl)}`;
       console.log('使用代理URL:', processedImageUrl);
     }
     

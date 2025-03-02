@@ -3,7 +3,7 @@ import cors from 'cors';
 import { hunyuan } from 'tencentcloud-sdk-nodejs-hunyuan';
 
 const app = express();
-const port = 3000;
+const port = process.env.PORT || 3002;
 
 // 启用CORS和JSON解析
 app.use(cors());
@@ -133,5 +133,5 @@ app.get('/api/query-image-job/:jobId', async (req, res) => {
 
 // 启动服务器
 app.listen(port, () => {
-  console.log(`服务器运行在 http://localhost:${port}`);
+  console.log(`图片生成服务运行在 http://localhost:${port}`);
 }); 

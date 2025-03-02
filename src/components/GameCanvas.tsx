@@ -7,7 +7,7 @@ const startHunyuanImageService = async () => {
   try {
     // 先尝试检查服务是否已经运行
     try {
-      const response = await fetch('http://localhost:3000/api/health-check', {
+      const response = await fetch('http://localhost:3002/api/health-check', {
         method: 'GET',
       });
       

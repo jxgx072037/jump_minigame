@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusMessage = document.getElementById('statusMessage');
 
   // API基础URL - 根据实际部署情况修改
-  const API_BASE_URL = 'http://localhost:3000/api';
+  const API_BASE_URL = 'http://localhost:3002/api';
   
   // 轮询间隔（毫秒）
   const POLLING_INTERVAL = 3000;

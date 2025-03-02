@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { Platform } from './platform'
+import { Platform } from './platform.js'
 
 export class Player {
   private mesh: THREE.Group
@@ -187,11 +187,189 @@ export class Player {
   public update(deltaTime: number): void {
     // 如果使用自定义模型，不需要更新悬浮球动画
     if (this.customModel) {
-      // 只更新自定义模型的动画
-      if (this.isJumping || this.isFalling) {
-        // 已有的跳跃和下落逻辑保持不变
+      // 自定义模型的跳跃和下落逻辑
+      if (this.isFalling) {
+        this.fallProgress += deltaTime / this.fallDuration
+        if (this.fallProgress >= 1) {
+          this.fallProgress = 1
+          this.isFalling = false
+        }
+        
+        // 设置精确的90度旋转角度
+        const angle = (Math.PI / 2) * this.fallProgress
+        
+        // 根据失败方向设置旋转轴
+        // 计算垂直于失败方向的旋转轴
+        const rotationAxis = new THREE.Vector3(this.fallDirection.z, 0, -this.fallDirection.x)
+        rotationAxis.normalize()
+        
+        // 应用旋转
+        this.mesh.quaternion.setFromAxisAngle(rotationAxis, angle)
+        
+        // 计算高度下降
+        // 从平台高度1逐渐降低到地面高度0
+        const currentY = Math.max(0, this.fallStartY * (1 - this.fallProgress))
+        this.mesh.position.y = currentY
+        
+        console.log(`[DEBUG] 自定义模型下落: progress=${this.fallProgress.toFixed(2)}, y=${currentY.toFixed(2)}`);
       }
-      return;
+
+      if (this.isJumping) {
+        this.jumpProgress += deltaTime / this.jumpDuration
+        
+        // 每隔一段时间记录跳跃进度
+        if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
+          console.log('[DEBUG] 自定义模型跳跃进度:', this.jumpProgress.toFixed(2));
+        }
+        
+        if (this.jumpProgress >= 1) {
+          this.jumpProgress = 1
+          this.isJumping = false
+          this.isFlipping = false // 确保翻转动画结束
+          console.log('[DEBUG] 自定义模型跳跃完成');
+          
+          // 重置旋转，确保模型回到正常姿态
+          this.mesh.rotation.x = 0;
+          this.mesh.rotation.z = 0;
+          
+          // 获取目标位置的XZ坐标
+          const targetPos = this.jumpTargetPosition.clone()
+          // 保留Y坐标为1，保证在平台高度上进行检测
+          targetPos.y = 1
+          
+          // 将玩家移动到目标位置
+          this.setPosition(targetPos.x, targetPos.y, targetPos.z)
+          console.log('[DEBUG] 设置最终位置:', targetPos);
+          
+          // 获取最新的玩家位置（可能与目标位置略有不同）
+          const playerPos = this.getPosition()
+          console.log('[DEBUG] 实际最终位置:', playerPos);
+          
+          // 检查是否在任何平台上
+          let isOnAnyPlatform = false
+          for (const platform of this.platforms) {
+            if (platform.isPointOnPlatform(playerPos)) {
+              isOnAnyPlatform = true
+              break
+            }
+          }
+          
+          // 打印调试信息
+          this.printDebugInfo(this.platforms)
+          
+          if (isOnAnyPlatform) {
+            // 如果在任何平台范围内，保持y=1
+            // 跳跃成功
+            if (this.onJumpComplete) {
+              console.log('[DEBUG] 跳跃判定: 成功')
+              this.onJumpComplete(true)
+            }
+          } else {
+            // 如果不在任何平台范围内，y=0（掉落）
+            this.setPosition(playerPos.x, 0, playerPos.z)
+            // 跳跃失败
+            if (this.onJumpComplete) {
+              console.log('[DEBUG] 跳跃判定: 失败')
+              this.onJumpComplete(false)
+            }
+          }
+          return
+        }
+
+        // 计算当前位置（抛物线轨迹）
+        const t = this.jumpProgress
+        const p0 = this.jumpStartPosition
+        const p1 = this.jumpTargetPosition
+        const distance = p1.distanceTo(p0)
+        const height = 4 //跳跃高度固定为4
+        
+        // 水平线性插值
+        const currentX = p0.x + (p1.x - p0.x) * t
+        const currentZ = p0.z + (p1.z - p0.z) * t
+        
+        // 修改垂直抛物线公式，使其更接近半圆形
+        // 使用正弦函数来创建更接近半圆的曲线
+        const currentY = 1 + height * Math.sin(Math.PI * t)
+        
+        // 每隔一段时间记录位置
+        if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
+          console.log('[DEBUG] 自定义模型跳跃轨迹:', {
+            progress: t.toFixed(2),
+            x: currentX.toFixed(2),
+            y: currentY.toFixed(2),
+            z: currentZ.toFixed(2),
+            height: height.toFixed(2)
+          });
+        }
+
+        this.mesh.position.set(currentX, currentY, currentZ)
+
+        // 计算移动方向
+        const moveDirection = new THREE.Vector3(p1.x - p0.x, 0, p1.z - p0.z).normalize();
+        
+        // 计算朝向
+        if (t < 1) {
+          const direction = new THREE.Vector2(p1.x - p0.x, p1.z - p0.z).angle()
+          this.mesh.rotation.y = direction
+        }
+        
+        // 修改翻转动画，从跳跃开始就启动，在落地时正好完成一周
+        // 翻转进度与跳跃进度一致，从0到1
+        const flipT = t;
+        
+        // 执行360度翻转
+        const flipAngle = flipT * Math.PI * 2; // 0到2π（360度）
+        
+        // 修改翻转轴，使其垂直于移动方向，但始终保持前空翻效果
+        // 确定主要移动方向（X轴或Z轴）
+        const absX = Math.abs(moveDirection.x);
+        const absZ = Math.abs(moveDirection.z);
+        
+        // 创建一个四元数来存储旋转
+        const flipQuaternion = new THREE.Quaternion();
+        
+        // 保存原始Y轴旋转（朝向）
+        const originalRotationY = this.mesh.rotation.y;
+        
+        // 根据主要移动方向确定翻转轴
+        if (absX > absZ) {
+          // 主要沿X轴移动，绕Z轴的垂直轴翻转（即绕Y轴的垂直轴）
+          // 如果是向-X方向移动，需要反向翻转
+          const rotationAxis = new THREE.Vector3(0, 0, Math.sign(moveDirection.x));
+          flipQuaternion.setFromAxisAngle(rotationAxis, flipAngle);
+          
+          if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
+            console.log('[DEBUG] 自定义模型X轴方向前空翻, 方向:', Math.sign(moveDirection.x) > 0 ? '正X' : '负X');
+          }
+        } else {
+          // 主要沿Z轴移动，绕X轴的垂直轴翻转
+          // 如果是向-Z方向移动，需要反向翻转
+          const rotationAxis = new THREE.Vector3(Math.sign(moveDirection.z), 0, 0);
+          flipQuaternion.setFromAxisAngle(rotationAxis, flipAngle);
+          
+          if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
+            console.log('[DEBUG] 自定义模型Z轴方向前空翻, 方向:', Math.sign(moveDirection.z) > 0 ? '正Z' : '负Z');
+          }
+        }
+        
+        // 应用翻转旋转
+        this.mesh.quaternion.copy(flipQuaternion);
+        
+        // 恢复原始Y轴旋转（朝向）
+        this.mesh.rotation.y = originalRotationY;
+        
+        if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
+          console.log('[DEBUG] 自定义模型执行翻转:', {
+            progress: flipT.toFixed(2),
+            angle: (flipAngle * 180 / Math.PI).toFixed(2) + '度'
+          });
+        }
+
+        // 更新碰撞边界
+        this.updateBoundingBox()
+      }
+      
+      return; // 自定义模型处理完毕，不执行下面的代码
     }
     
     // 原有的更新逻辑
@@ -405,14 +583,29 @@ export class Player {
   // 缩放动画（按压效果）
   public scale(scale: number): void {
     if (this.customModel) {
-      // 对自定义模型应用Y轴缩放
+      // 对于自定义模型，只调整Y轴缩放
+      // 保持原始位置不变，只改变模型的高度
+      const originalY = this.mesh.position.y;
       this.mesh.scale.y = scale;
+      
+      // 确保模型的底部位置保持不变
+      // 计算模型的边界盒以获取高度
+      const boundingBox = new THREE.Box3().setFromObject(this.mesh);
+      const height = boundingBox.max.y - boundingBox.min.y;
+      
+      // 调整位置以保持底部固定
+      // 当缩放减小时，需要降低模型的Y位置以保持底部固定
+      const baseY = 1; // 基础高度（平台高度）
+      this.mesh.position.y = baseY + (height * (1 - scale)) / 2;
+      
+      console.log(`[DEBUG] 自定义模型缩放: scale=${scale}, height=${height}, position.y=${this.mesh.position.y}`);
     } else {
-      // 原始棋子模型的缩放
+      // 原始模型的处理逻辑保持不变
       this.body.scale.y = 1;
-      this.floatingBall.position.y = 1.6 + this.initialBallHeight * scale;
-      this.floatingBall.scale.y = scale;
+      this.floatingBall.position.y = 1.5 - (1 - scale) * 0.5;
+      this.floatingBall.scale.set(scale, scale, scale);
     }
+    
     this.updateBoundingBox();
   }
 
@@ -443,6 +636,7 @@ export class Player {
     this.jumpProgress = 0
     this.jumpPower = power
     this.onJumpComplete = onComplete
+    this.platforms = platforms // 保存平台引用，用于碰撞检测
     
     const currentPos = this.getPosition()
     this.jumpStartPosition.copy(currentPos)
@@ -461,9 +655,11 @@ export class Player {
       jumpTargetPosition: this.jumpTargetPosition,
       jumpDistance,
       jumpDuration: this.jumpDuration,
-      jumpSpeed: this.JUMP_SPEED
+      jumpSpeed: this.JUMP_SPEED,
+      customModel: this.customModel ? '已设置' : '未设置'
     });
     
+    // 无论是否为自定义模型，都重置缩放
     this.scale(1)
   }
 
@@ -521,7 +717,11 @@ export class Player {
     this.fallDuration = 0.8
     
     // 重置之前的旋转，保留Y轴旋转角度（朝向）
-    this.mesh.rotation.set(0, this.mesh.rotation.y, 0)
+    const originalRotationY = this.mesh.rotation.y
+    this.mesh.rotation.set(0, originalRotationY, 0)
+    
+    console.log(`[DEBUG] ${this.customModel ? '自定义模型' : '标准棋子'}开始倒下，方向:`, 
+      this.fallDirection, '起始高度:', this.fallStartY);
   }
 
   // 获取当前自定义模型

@@ -35,11 +35,21 @@ npm install express cors tencentcloud-sdk-nodejs-hunyuan
 node demoFiles/imageGenerationServer.js
 ```
 
-服务器将在 http://localhost:3000 上运行。
+服务器将在 http://localhost:3002 上运行。
 
 ## 使用方法
 
-1. 打开浏览器访问 http://localhost:3000
+1. 启动服务器：
+
+```bash
+node imageGenerationServer.js
+```
+
+服务器将在 http://localhost:3002 上运行。
+
+## 测试界面
+
+1. 打开浏览器访问 http://localhost:3002
 2. 填写图像生成表单
 3. 点击"提交生图任务"按钮
 4. 等待图像生成完成
