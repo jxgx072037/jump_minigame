@@ -79,6 +79,12 @@ export class GameEngine {
   // 添加主光源属性
   private mainLight!: THREE.DirectionalLight
 
+  // 添加云朵相关属性
+  private clouds: THREE.Group[] = []
+  private readonly CLOUD_SPEED: number = 2 // 云朵移动速度
+  private readonly CLOUD_RESPAWN_X: number = 400 // 云朵重生的X坐标
+  private readonly CLOUD_DESPAWN_X: number = -400 // 云朵消失的X坐标
+
   // 添加粒子系统和音效
   private particleSystem!: ParticleSystem
   private audioManager!: AudioManager
@@ -87,6 +93,14 @@ export class GameEngine {
   
   // 添加唯一ID用于调试
   private instanceId!: string
+
+  // 添加透明平面和动画相关属性
+  private transparentPlane!: THREE.Mesh
+  private platformRippleEffect!: THREE.Mesh
+  private platformRippleEffect2!: THREE.Mesh // 添加第二个涟漪效果
+  private isRippleAnimating: boolean = false
+  private rippleAnimationProgress: number = 0
+  private readonly RIPPLE_ANIMATION_DURATION: number = 1.5 // 增加动画持续时间至1.5秒
 
   // 修改构造函数为私有
   private constructor(container: HTMLElement) {
@@ -122,6 +136,10 @@ export class GameEngine {
     // 创建场景
     this.scene = new THREE.Scene()
     this.scene.background = new THREE.Color(0xFFFFFF) // 纯白色背景
+    
+    // 添加雾效果，创建远距离的大气感
+    const fogColor = new THREE.Color(0xE6F7FF); // 淡蓝色的雾
+    this.scene.fog = new THREE.FogExp2(fogColor, 0.005); // 指数雾，密度为0.005
 
     // 创建相机
     this.camera = new THREE.PerspectiveCamera(
@@ -152,6 +170,13 @@ export class GameEngine {
     this.renderer.setClearColor(0xFFFFFF, 1) // 纯白色背景
     this.renderer.shadowMap.enabled = true // 启用阴影
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap // 使用PCF柔和阴影
+    
+    // 增强阴影质量设置
+    this.renderer.shadowMap.autoUpdate = true // 确保阴影自动更新
+    // 使用支持的色调映射设置
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping // 使用ACES电影色调映射
+    this.renderer.toneMappingExposure = 1.0 // 设置色调映射曝光
+    
     container.appendChild(this.renderer.domElement)
 
     // 创建控制器
@@ -516,9 +541,13 @@ export class GameEngine {
 
   private setupLights(): void {
     // 主光源 - 从上方照射
-    const mainLight = new THREE.DirectionalLight(0xffffff, 4) // 增加主光源强度
-    mainLight.position.set(10, 10, 0)
+    const mainLight = new THREE.DirectionalLight(0xffffff, 2.0) // 降低光源强度，使光线更柔和
+    mainLight.position.set(50, 200, 50) // 调高光源位置并更倾斜，使阴影更长
     mainLight.castShadow = true
+    
+    // 设置光源目标点并添加到场景
+    mainLight.target.position.set(0, -100, 0) // 目标点指向地面中心
+    this.scene.add(mainLight.target)
     
     // 打印初始光源位置
     console.log('初始光源位置:', {
@@ -533,23 +562,23 @@ export class GameEngine {
     mainLight.shadow.camera.top = 300
     mainLight.shadow.camera.bottom = -300
     mainLight.shadow.camera.near = 0.1
-    mainLight.shadow.camera.far = 100
+    mainLight.shadow.camera.far = 800 // 增加阴影相机的远平面距离，使阴影能投射更远
     mainLight.shadow.mapSize.width = 4096
     mainLight.shadow.mapSize.height = 4096
-    mainLight.shadow.bias = -0.001
-    mainLight.shadow.radius = 2
-    mainLight.shadow.blurSamples = 16
-
-    // 调整光源位置和强度
-    mainLight.intensity = 2.5 // 增加光照强度，使地面更加明亮
-
+    mainLight.shadow.bias = -0.0003 // 微调阴影偏差，减少阴影失真
+    mainLight.shadow.normalBias = 0.04 // 增加法线偏差，改善阴影质量
+    mainLight.shadow.radius = 10 // 添加阴影模糊半径，增加阴影的柔和度
+    
+    // 添加辅助光源 - 环境光
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5) // 增加环境光强度，减轻阴影的深度
+    
     this.scene.add(mainLight)
-    // 保存主光源引用
+    this.scene.add(ambientLight)
     this.mainLight = mainLight
-
-    // 填充光 - 增加环境光强度
-    const fillLight = new THREE.AmbientLight(0xffffff, 1.5) // 增加环境光强度
-    this.scene.add(fillLight)
+    
+    // 添加阴影相机辅助对象（调试用）
+    // const shadowCameraHelper = new THREE.CameraHelper(mainLight.shadow.camera)
+    // this.scene.add(shadowCameraHelper)
   }
 
   private setupHelpers(): void {
@@ -628,7 +657,7 @@ export class GameEngine {
     this.renderAxes = renderAxes
 
     // 添加地面平面
-    const groundGeometry = new THREE.PlaneGeometry(100, 100); // 稍微减小地面尺寸，与纹理重复设置相匹配
+    const groundGeometry = new THREE.PlaneGeometry(2000, 2000); // 增加地面尺寸，与纹理重复设置相匹配
     const groundMaterial = new THREE.MeshStandardMaterial({
       color: 0xFFFFFF, // 使用纯白色
       metalness: 0.2, // 增加金属感
@@ -639,15 +668,112 @@ export class GameEngine {
     })
     const ground = new THREE.Mesh(groundGeometry, groundMaterial)
     ground.rotation.x = -Math.PI / 2
-    ground.position.y = -0.001
-    ground.receiveShadow = true
+    ground.position.y = -100
+    ground.receiveShadow = true // 确保地面可以接收阴影
     this.scene.add(ground)
     // 将ground保存为类属性，以便后续移动
     this.ground = ground
 
+    // 在地面上随机添加100个长方体
+    for (let i = 0; i < 100; i++) {
+      // 随机生成长方体的尺寸(5-20之间)
+      const width = 5 + Math.random() * 15
+      const height = 5 + Math.random() * 15 
+      const depth = 5 + Math.random() * 15
+
+      // 创建长方体几何体和材质
+      const boxGeometry = new THREE.BoxGeometry(width, height, depth)
+      // 生成0到1之间的随机数，用于灰度值
+      const grayScale = Math.random()
+      const boxMaterial = new THREE.MeshStandardMaterial({
+        color: new THREE.Color(grayScale, grayScale, grayScale), // RGB相等时为灰度
+        metalness: 0.3,
+        roughness: 0.7
+      })
+
+      // 创建长方体网格
+      const box = new THREE.Mesh(boxGeometry, boxMaterial)
+
+      // 随机设置位置 (-500到500之间，对应1000x1000的平面)
+      box.position.x = -500 + Math.random() * 1000
+      box.position.y = -100 + height/2 // 确保长方体底部在y=-100平面上
+      box.position.z = -500 + Math.random() * 1000
+
+      // 添加阴影
+      box.castShadow = true
+      box.receiveShadow = true
+
+      // 将长方体添加到场景
+      this.scene.add(box)
+    }
+
+    // 在场景中添加像素风格的云朵
+    for (let i = 0; i < 100; i++) {
+      // 创建云朵组
+      const cloudGroup = new THREE.Group()
+      
+      // 随机决定这朵云由多少个方块组成(20-50个)
+      const blockCount = 20 + Math.floor(Math.random() * 31)
+      
+      // 单位方块的大小固定
+      const blockSize = 3
+      
+      // 创建单位方块的几何体和材质(可重用)
+      const blockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize)
+      const blockMaterial = new THREE.MeshStandardMaterial({
+        color: 0xffffff,
+        transparent: true,
+        opacity: 0.3 + Math.random() * 0.3, // 0.3-0.6的随机透明度
+        roughness: 0.8,
+        metalness: 0.2
+      })
+      
+      // 在一个椭球形区域内随机分布方块，形成扁平的云朵形状
+      const radiusX = 15 // x轴方向的半径
+      const radiusY = 8  // y轴方向的半径
+      const radiusZ = 8  // z轴方向的半径
+      
+      for (let j = 0; j < blockCount; j++) {
+        // 创建单位方块
+        const block = new THREE.Mesh(blockGeometry, blockMaterial)
+        
+        // 在椭球形区域内随机位置
+        const theta = Math.random() * Math.PI * 2
+        const phi = Math.random() * Math.PI
+        const r = Math.random()
+        
+        // 使用不同的半径来创建椭球形状
+        block.position.x = radiusX * r * Math.sin(phi) * Math.cos(theta)
+        block.position.y = radiusY * r * Math.sin(phi) * Math.sin(theta)
+        block.position.z = radiusZ * r * Math.cos(phi)
+        
+        // 添加到云朵组
+        cloudGroup.add(block)
+      }
+
+      // 随机设置整个云朵的位置
+      cloudGroup.position.x = this.CLOUD_DESPAWN_X + Math.random() * (this.CLOUD_RESPAWN_X - this.CLOUD_DESPAWN_X) // -400到400之间
+      cloudGroup.position.y = -70 + Math.random() * 40 // -70到-30之间
+      cloudGroup.position.z = -400 + Math.random() * 800 // -400到400之间
+
+      // 添加到场景
+      this.scene.add(cloudGroup)
+      
+      // 将云朵添加到数组中以便后续更新
+      this.clouds.push(cloudGroup)
+    }
+
+    // 创建一个平面来表示地面
+    // 使用莫兰迪色系的颜色 - 选择一个柔和的灰绿色
+    const helperGroundMaterial = new THREE.MeshStandardMaterial({  // 改名为 helperGroundMaterial
+        color: 0x8B9B8B,  // 莫兰迪灰绿色
+        roughness: 0.8,
+        metalness: 0.2
+    });
+
     // 添加地面碰撞边界（保留碰撞检测逻辑，但不显示边界）
     const groundBoundingBox = new THREE.Box3(
-      new THREE.Vector3(-20, -0.1, -20),
+      new THREE.Vector3(-20, -100, -20),
       new THREE.Vector3(20, 0, 20)
     )
   }
@@ -672,6 +798,50 @@ export class GameEngine {
 
     // 设置玩家的初始平台
     this.player.setCurrentPlatform(startPlatform)
+
+    // 创建透明平面（用于动画效果）
+    const planeGeometry = new THREE.PlaneGeometry(1000, 1000)
+    const planeMaterial = new THREE.MeshBasicMaterial({
+      color: 0xFFFFFF,
+      transparent: true,
+      opacity: 0,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    })
+    this.transparentPlane = new THREE.Mesh(planeGeometry, planeMaterial)
+    this.transparentPlane.rotation.x = -Math.PI / 2 // 平面朝上
+    this.transparentPlane.position.y = -0.01 // 略低于Y=0平面
+    this.scene.add(this.transparentPlane)
+    
+    // 创建平台落下效果的圆环
+    const rippleGeometry = new THREE.RingGeometry(0, 0.1, 32)
+    const rippleMaterial = new THREE.MeshBasicMaterial({
+      color: 0x87CEFA, 
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    })
+    this.platformRippleEffect = new THREE.Mesh(rippleGeometry, rippleMaterial)
+    this.platformRippleEffect.rotation.x = -Math.PI / 2 // 圆环平面朝上
+    this.platformRippleEffect.position.y = -0.005 // 确保在透明平面上方一点点
+    this.platformRippleEffect.visible = false // 初始不可见
+    this.scene.add(this.platformRippleEffect)
+    
+    // 创建第二个圆环（稍微不同的颜色）
+    const rippleGeometry2 = new THREE.RingGeometry(0, 0.1, 32)
+    const rippleMaterial2 = new THREE.MeshBasicMaterial({
+      color: 0x87CEFA, 
+      transparent: true,
+      opacity: 0.7,
+      side: THREE.DoubleSide,
+      depthWrite: false
+    })
+    this.platformRippleEffect2 = new THREE.Mesh(rippleGeometry2, rippleMaterial2)
+    this.platformRippleEffect2.rotation.x = -Math.PI / 2 // 圆环平面朝上
+    this.platformRippleEffect2.position.y = -0.005 // 确保在透明平面上方一点点
+    this.platformRippleEffect2.visible = false // 初始不可见
+    this.scene.add(this.platformRippleEffect2)
 
     // 立即生成第二个平台
     this.generateNextPlatform()
@@ -698,6 +868,55 @@ export class GameEngine {
     
     // 更新所有平台的下落动画
     this.platforms.forEach(platform => platform.update(deltaTime))
+    
+    // 更新平台落下涟漪动画
+    if (this.isRippleAnimating) {
+      this.rippleAnimationProgress += deltaTime / this.RIPPLE_ANIMATION_DURATION
+      
+      if (this.rippleAnimationProgress >= 1) {
+        // 动画完成
+        this.rippleAnimationProgress = 0
+        this.isRippleAnimating = false
+        this.platformRippleEffect.visible = false
+        this.platformRippleEffect2.visible = false
+      } else {
+        // 由于现在是在平台完全停止弹跳后才显示动画，可以让两个圆环同时显示
+        // 第一个环扩大得更快更大
+        const size = 8 * this.rippleAnimationProgress // 从0扩大到8
+        const opacity = 0.4 * (1 - this.rippleAnimationProgress) // 从0.4降低到0
+        
+        // 更新第一个圆环几何体
+        const rippleGeometry = new THREE.RingGeometry(
+          Math.max(0.1, size - 0.4), // 内径
+          size, // 外径
+          32 // 分段数
+        )
+        this.platformRippleEffect.geometry.dispose() // 释放旧几何体
+        this.platformRippleEffect.geometry = rippleGeometry
+        
+        // 更新第一个圆环材质透明度
+        const material = this.platformRippleEffect.material as THREE.MeshBasicMaterial
+        material.opacity = opacity
+        
+        // 第二个环稍微小一些，但同时开始
+        const size2 = 4 * this.rippleAnimationProgress // 从0扩大到6
+        const opacity2 = 0.4 * (1 - this.rippleAnimationProgress) // 从0.4降低到0
+        
+        const rippleGeometry2 = new THREE.RingGeometry(
+          Math.max(0.1, size2 - 0.4), // 内径
+          size2, // 外径
+          32 // 分段数
+        )
+        this.platformRippleEffect2.geometry.dispose() // 释放旧几何体
+        this.platformRippleEffect2.geometry = rippleGeometry2
+        
+        // 更新第二个圆环材质透明度
+        const material2 = this.platformRippleEffect2.material as THREE.MeshBasicMaterial
+        material2.opacity = opacity2
+        
+        this.platformRippleEffect2.visible = true
+      }
+    }
     
     // 如果正在按压，更新蓄力动画
     if (this.isPressing) {
@@ -729,20 +948,25 @@ export class GameEngine {
         this.cameraMoveProgress
       )
       
-      // 更新观察点
-      const currentLookAt = new THREE.Vector3().lerpVectors(
+      // 线性插值计算当前目标点
+      const currentLookAt = new THREE.Vector3()
+      currentLookAt.lerpVectors(
         this.cameraStartLookAt,
         this.cameraTargetLookAt,
         this.cameraMoveProgress
       )
+      
+      // 更新相机朝向
       this.camera.lookAt(currentLookAt)
     }
     
     // 更新地面位置
     if (this.isGroundMoving) {
+      // 更新移动进度
       this.groundMoveProgress += deltaTime / this.groundMoveDuration
       
       if (this.groundMoveProgress >= 1) {
+        // 移动完成
         this.groundMoveProgress = 1
         this.isGroundMoving = false
       }
@@ -755,13 +979,67 @@ export class GameEngine {
       )
     }
     
-    // 渲染主场景
+    // 更新光源位置和阴影相机
+    if (this.mainLight) {
+      // 确保光源始终指向地面中心
+      const groundCenter = new THREE.Vector3(
+        this.ground.position.x,
+        -100, // 地面的Y坐标
+        this.ground.position.z
+      );
+      
+      // 更新光源位置，保持在地面中心上方并偏移，创造更明显的阴影
+      this.mainLight.position.set(
+        groundCenter.x + 50, // 增加X轴偏移，使阴影角度更明显
+        150, // 保持高度不变
+        groundCenter.z + 50 // 增加Z轴偏移，使阴影角度更明显
+      );
+      
+      // 让光源指向地面中心
+      this.mainLight.target.position.copy(groundCenter);
+      this.mainLight.target.updateMatrixWorld();
+      
+      // 更新阴影相机的范围，使其覆盖地面
+      this.mainLight.shadow.camera.left = groundCenter.x - 500;
+      this.mainLight.shadow.camera.right = groundCenter.x + 500;
+      this.mainLight.shadow.camera.top = groundCenter.z + 500;
+      this.mainLight.shadow.camera.bottom = groundCenter.z - 500;
+      
+      // 更新阴影相机的投影矩阵
+      this.mainLight.shadow.camera.updateProjectionMatrix();
+    }
+    
+    // 更新云朵位置
+    this.clouds.forEach((cloud, index) => {
+      // 云朵向x轴负方向移动
+      cloud.position.x -= this.CLOUD_SPEED * deltaTime;
+      
+      // 如果云朵移出了视野范围，将其重新放置到x轴正方向
+      if (cloud.position.x < this.CLOUD_DESPAWN_X) {
+        // 创建一个新的云朵来替换当前云朵
+        this.scene.remove(cloud);
+        
+        // 创建新的云朵
+        const newCloud = this.createCloud();
+        
+        // 将新云朵放置在x轴正方向
+        newCloud.position.x = this.CLOUD_RESPAWN_X;
+        newCloud.position.y = -70 + Math.random() * 40; // -70到-30之间
+        newCloud.position.z = -400 + Math.random() * 800; // -400到400之间
+        
+        // 添加到场景
+        this.scene.add(newCloud);
+        
+        // 替换数组中的云朵
+        this.clouds[index] = newCloud;
+      }
+    });
+    
+    // 渲染场景
     this.renderer.render(this.scene, this.camera)
     
-    // 注释掉坐标轴渲染代码
-    // if (this.renderAxes) {
-    //   this.renderAxes()
-    // }
+    // 渲染坐标轴
+    // this.renderAxes()
   }
 
   private onWindowResize(): void {
@@ -920,6 +1198,9 @@ export class GameEngine {
       console.log(`最终平台位置: (${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)})`);
     }
 
+    // 播放平台落下前的动画效果
+    this.startPlatformRippleAnimation(newPosition.x, newPosition.z);
+
     // 创建新平台
     const newPlatform = new Platform(false)
     newPlatform.setPosition(
@@ -928,6 +1209,11 @@ export class GameEngine {
       newPosition.z
     )
     
+    // 设置平台第一次落地回调，用于触发水波纹动画
+    newPlatform.setOnFirstGroundContact(() => {
+      this.startPlatformRippleAnimation(newPosition.x, newPosition.z)
+    })
+    
     // 开始下落动画
     newPlatform.startFalling()
     
@@ -935,8 +1221,49 @@ export class GameEngine {
     this.platforms.push(newPlatform)
     this.player.addPlatform(newPlatform)
     
+    // 不再在这里调用startPlatformRippleAnimation方法
+    // 水波纹动画将在平台第一次接触地面时触发
+    
     // 简化平台位置信息的日志输出，只保留基本信息
     console.log(`新平台生成: (${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)})`);
+  }
+  
+  // 开始平台落下前的涟漪动画
+  private startPlatformRippleAnimation(x: number, z: number): void {
+    // 设置动画初始状态
+    this.rippleAnimationProgress = 0;
+    this.isRippleAnimating = true;
+    
+    // 将涟漪效果移动到新平台的位置
+    this.platformRippleEffect.position.x = x;
+    this.platformRippleEffect.position.z = z;
+    this.platformRippleEffect.position.y = -0.005; // 确保在透明平面上方一点点
+    
+    this.platformRippleEffect2.position.x = x;
+    this.platformRippleEffect2.position.z = z;
+    this.platformRippleEffect2.position.y = -0.005; // 确保在透明平面上方一点点
+    
+    // 初始设置圆环尺寸
+    const initialRippleGeometry = new THREE.RingGeometry(0, 0.1, 32);
+    this.platformRippleEffect.geometry.dispose();
+    this.platformRippleEffect.geometry = initialRippleGeometry;
+    
+    const initialRippleGeometry2 = new THREE.RingGeometry(0, 0.1, 32);
+    this.platformRippleEffect2.geometry.dispose();
+    this.platformRippleEffect2.geometry = initialRippleGeometry2;
+    
+    // 设置初始透明度
+    const material = this.platformRippleEffect.material as THREE.MeshBasicMaterial;
+    material.opacity = 0.8; // 增加初始透明度
+    
+    const material2 = this.platformRippleEffect2.material as THREE.MeshBasicMaterial;
+    material2.opacity = 0.8; // 增加初始透明度
+    
+    // 两个效果同时显示
+    this.platformRippleEffect.visible = true;
+    this.platformRippleEffect2.visible = true;
+    
+    console.log(`开始平台停止涟漪动画: (${x.toFixed(2)}, ${z.toFixed(2)})`);
   }
 
   private showGameOver(): void {
@@ -1145,7 +1472,7 @@ export class GameEngine {
     // 最小力度时跳跃距离为平台距离的60%，最大力度时为平台距离的110%
     // 这样确保足够的力度时可以跳到目标平台，但不会跳得太远
     const minJumpRatio = 0.6; // 最小跳跃比例
-    const maxJumpRatio = 3; // 最大跳跃比例，从5降低到1.1
+    const maxJumpRatio = 1.2; // 最大跳跃比例，从3降低到1.2，使游戏更难
     const jumpRatio = minJumpRatio + (maxJumpRatio - minJumpRatio) * power;
     const jumpDistance = platformDistance * jumpRatio;
     
@@ -2475,12 +2802,12 @@ export class GameEngine {
         
         // 创建新地面
         console.log('创建新地面');
-        const groundGeometry = new THREE.PlaneGeometry(100, 100); // 稍微减小地面尺寸，与纹理重复设置相匹配
+        const groundGeometry = new THREE.PlaneGeometry(2000, 2000); // 将地面尺寸大幅增加，从100增加到2000
         
         // 调整纹理设置
         texture.wrapS = THREE.RepeatWrapping;
         texture.wrapT = THREE.RepeatWrapping;
-        texture.repeat.set(3, 3); // 将重复次数从1增加到3，使图片在地面上显示得更小
+        texture.repeat.set(10, 10); // 设置为10,10，图片在两个方向上重复10次
         texture.anisotropy = this.renderer.capabilities.getMaxAnisotropy();
         
         const groundMaterial = new THREE.MeshStandardMaterial({
@@ -2491,7 +2818,7 @@ export class GameEngine {
           side: THREE.DoubleSide, // 确保两面都可见
           color: 0xffffff, // 使用纯白色作为基础颜色，不影响纹理
           emissive: 0x333333, // 增加自发光颜色强度
-          emissiveIntensity: 0.4 // 增加自发光强度
+          emissiveIntensity: 1 // 增加自发光强度
         });
         
         // 尝试设置纹理颜色空间（如果支持的话）
@@ -2504,10 +2831,10 @@ export class GameEngine {
         
         const ground = new THREE.Mesh(groundGeometry, groundMaterial);
         ground.rotation.x = -Math.PI / 2;
-        ground.position.y = -0.001;
+        ground.position.y = -100; // 将地面放回Y=-100平面
         ground.position.x = platformPosition.x;
         ground.position.z = platformPosition.z;
-        ground.receiveShadow = true;
+        ground.receiveShadow = true // 确保地面可以接收阴影
         ground.castShadow = false;
         
         // 添加到场景
@@ -3179,6 +3506,56 @@ export class GameEngine {
       statusContainerRef.textContent = '已使用备用模型！';
       statusContainerRef.style.color = '#FF9800';
     }
+  }
+  
+  /**
+   * 创建一个新的云朵
+   * @returns 创建的云朵组
+   */
+  private createCloud(): THREE.Group {
+    // 创建云朵组
+    const cloudGroup = new THREE.Group();
+    
+    // 随机决定这朵云由多少个方块组成(20-50个)
+    const blockCount = 20 + Math.floor(Math.random() * 31);
+    
+    // 单位方块的大小固定
+    const blockSize = 3
+    
+    // 创建单位方块的几何体和材质(可重用)
+    const blockGeometry = new THREE.BoxGeometry(blockSize, blockSize, blockSize)
+    const blockMaterial = new THREE.MeshStandardMaterial({
+      color: 0xffffff,
+      transparent: true,
+      opacity: 0.3 + Math.random() * 0.3, // 0.3-0.6的随机透明度
+      roughness: 0.8,
+      metalness: 0.2
+    })
+    
+    // 在一个椭球形区域内随机分布方块，形成扁平的云朵形状
+    const radiusX = 15 // x轴方向的半径
+    const radiusY = 8  // y轴方向的半径
+    const radiusZ = 8  // z轴方向的半径
+    
+    for (let j = 0; j < blockCount; j++) {
+      // 创建单位方块
+      const block = new THREE.Mesh(blockGeometry, blockMaterial)
+      
+      // 在椭球形区域内随机位置
+      const theta = Math.random() * Math.PI * 2
+      const phi = Math.random() * Math.PI
+      const r = Math.random()
+      
+      // 使用不同的半径来创建椭球形状
+      block.position.x = radiusX * r * Math.sin(phi) * Math.cos(theta)
+      block.position.y = radiusY * r * Math.sin(phi) * Math.sin(theta)
+      block.position.z = radiusZ * r * Math.cos(phi)
+      
+      // 添加到云朵组
+      cloudGroup.add(block)
+    }
+    
+    return cloudGroup;
   }
   
   // 替换棋子模型

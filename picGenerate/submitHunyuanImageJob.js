@@ -24,7 +24,7 @@ const clientConfig = {
 const client = new HunyuanClient(clientConfig);
 const params = {
   // 必选参数 - 业务参数
-  Prompt: "一只可爱的卡通猫咪，在阳光明媚的草地上玩耍", // 文本描述，最多1024个utf-8字符
+  Prompt: "一只可爱的卡通猫咪，在阳光明媚的草地上玩耍，四向无缝拼接", // 文本描述，最多1024个utf-8字符
 
   // 可选参数
   NegativePrompt: "模糊，扭曲，低质量", // 反向提示词，告诉AI不需要生成的内容

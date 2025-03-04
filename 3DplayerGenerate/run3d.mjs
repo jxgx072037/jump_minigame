@@ -36,7 +36,14 @@ if (!prompt) {
 }
 
 // 直接从系统环境变量获取API密钥
-const API_KEY = process.env.Hunyuan_api_key;
+let API_KEY = process.env.Hunyuan_api_key;
+
+// 确保API_KEY不包含"Bearer"前缀，如果包含则移除
+if (API_KEY && API_KEY.includes('Bearer')) {
+  // 移除可能的"Bearer "前缀，避免重复
+  API_KEY = API_KEY.replace(/^Bearer\s+/i, '');
+  console.log('已从API密钥中移除Bearer前缀');
+}
 
 if (!API_KEY) {
   console.error('错误: 未找到Hunyuan_api_key环境变量。请确保已设置此环境变量。');
@@ -56,7 +63,7 @@ async function submit3DGeneration(prompt) {
       url: 'http://hunyuanapi.woa.com/openapi/v1/3d/generations/submission',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
+        'Authorization': API_KEY.startsWith('Bearer') ? API_KEY : `Bearer ${API_KEY}`
       },
       data: {
         model: 'hunyuan-3d-dit',
@@ -81,7 +88,7 @@ async function queryTaskStatus(taskId) {
       url: 'http://hunyuanapi.woa.com/openapi/v1/3d/generations/task',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${API_KEY}`
+        'Authorization': API_KEY.startsWith('Bearer') ? API_KEY : `Bearer ${API_KEY}`
       },
       data: {
         task_id: taskId
@@ -181,16 +188,28 @@ async function main() {
   try {
     console.log(`提交3D生成任务，提示词: "${prompt}", 任务ID: "${taskId}"`);
     
-    // 清空models目录中的文件
-    console.log('清空models目录中的文件...');
+    // 清空models目录中的文件，但保留demo文件夹
+    console.log('清空models目录中的文件（保留demo文件夹）...');
     try {
       const files = fs.readdirSync(modelsDir);
       for (const file of files) {
+        // 跳过demo文件夹
+        if (file === 'demo') {
+          console.log(`保留文件夹: ${file}`);
+          continue;
+        }
+        
         const filePath = path.join(modelsDir, file);
-        fs.unlinkSync(filePath);
-        console.log(`已删除文件: ${filePath}`);
+        const stats = fs.statSync(filePath);
+        
+        if (stats.isFile()) {
+          fs.unlinkSync(filePath);
+          console.log(`已删除文件: ${filePath}`);
+        } else {
+          console.log(`跳过文件夹: ${filePath}`);
+        }
       }
-      console.log('models目录已清空');
+      console.log('models目录已清空（保留demo文件夹）');
     } catch (error) {
       console.error('清空models目录时出错:', error);
       // 继续执行，不中断任务提交

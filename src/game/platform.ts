@@ -46,15 +46,24 @@ export class Platform {
   private readonly BOUNCE_THRESHOLD: number = 0.1 // 停止弹跳的阈值
   private boundingBox: THREE.Box3
   private boundingBoxHelper: THREE.Box3Helper
+  private isStart: boolean = false
+  private onFirstGroundContact: (() => void) | null = null // 添加回调函数
+  private hasContactedGround: boolean = false // 添加标记，用于跟踪是否已经接触过地面
 
   constructor(isStart: boolean = false) {
     this.mesh = new THREE.Group()
+    this.isStart = isStart
 
-    // 创建平台（单层结构）
-    const platformGeometry = new THREE.BoxGeometry(2.5, 1.0, 2.5)
+    // 创建平台（尺寸随机）
+    const sizeX = isStart ? 2.5 : 2 + Math.random(); // x轴尺寸在2到3之间随机浮动
+    const sizeZ = isStart ? 2.5 : 2 + Math.random(); // z轴尺寸在2到3之间随机浮动
+    const platformGeometry = new THREE.BoxGeometry(sizeX, 1, sizeZ)
     
     // 选择随机颜色
     let platformColor = 0xFFFFFF // 默认白色（用于起始平台）
+    
+    // 随机透明度（0.6-1之间）
+    const opacity = isStart ? 1 : 0.6 + Math.random() * 0.4;
     
     if (!isStart) {
       // 随机选择一个颜色系列
@@ -66,7 +75,9 @@ export class Platform {
 
     const platformMaterial = new THREE.MeshPhongMaterial({
       color: platformColor,
-      shininess: 0
+      shininess: 0,
+      transparent: true,
+      opacity: opacity
     })
     const platform = new THREE.Mesh(platformGeometry, platformMaterial)
     platform.position.y = 0.5 // 将平台上移到中心点
@@ -99,8 +110,10 @@ export class Platform {
     // 获取平台的世界位置
     const worldPosition = this.mesh.position.clone()
     
-    // 平台的固定尺寸
-    const size = new THREE.Vector3(2.5, 1.0, 2.5)
+    // 平台的尺寸，x和z在2到3之间随机浮动
+    const sizeX = this.isStart ? 2.5 : 2 + Math.random();
+    const sizeZ = this.isStart ? 2.5 : 2 + Math.random();
+    const size = new THREE.Vector3(sizeX, 1, sizeZ);
     
     // 设置边界框的最小点和最大点
     this.boundingBox.min.set(
@@ -165,11 +178,19 @@ export class Platform {
       if (Math.abs(this.velocity) > this.BOUNCE_THRESHOLD) {
         this.velocity = -this.velocity * this.BOUNCE_FACTOR
         this.mesh.position.y = 0
+        
+        // 移除在第一次接触地面时触发回调的代码
+        // 不再在这里触发水波纹动画
       } else {
         // 停止弹跳
         this.mesh.position.y = 0
         this.isFalling = false
         this.velocity = 0
+        
+        // 弹跳完全结束时才触发回调
+        if (this.onFirstGroundContact) {
+          this.onFirstGroundContact()
+        }
       }
     } else {
       this.mesh.position.y = newY
@@ -205,8 +226,8 @@ export class Platform {
     const halfWidth = size.x / 2
     const halfDepth = size.z / 2
     
-    // 增加容错距离从0.15到0.4单位
-    const tolerance = 0.4
+    // 减小容错距离从0.4到0.15单位，使游戏更难
+    const tolerance = 0.15
     
     // 只检查x和z坐标是否在平台范围内（添加容错）
     const isOnPlatform = (
@@ -245,5 +266,11 @@ export class Platform {
   // 获取碰撞边界可视化助手
   public getBoundingBoxHelper(): THREE.Box3Helper {
     return this.boundingBoxHelper
+  }
+
+  // 设置第一次接触地面的回调
+  public setOnFirstGroundContact(callback: () => void): void {
+    this.onFirstGroundContact = callback
+    this.hasContactedGround = false // 重置标记
   }
 } 
