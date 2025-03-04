@@ -1,10 +1,10 @@
 import * as THREE from 'three'
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { Platform } from './platform'
-import { Player } from './player'
-import { ParticleSystem } from './particles'
-import { AudioManager } from './audio'
-import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
+import { Platform } from './platform.js'
+import { Player } from './player.js'
+import { ParticleSystem } from './particles.js'
+import { AudioManager } from './audio.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader'
 
 // 静态属性声明
 export class GameEngine {
@@ -98,6 +98,7 @@ export class GameEngine {
 
     // 生成实例ID用于调试
     this.instanceId = Math.random().toString(36).substring(2, 8);
+    
     console.log(`[DEBUG] 创建新的GameEngine实例 ID: ${this.instanceId}`);
     
     // 从全局变量获取游戏状态
@@ -659,6 +660,9 @@ export class GameEngine {
   }
 
   private setupPlatforms(): void {
+    // 清空现有平台数组
+    this.platforms = [];
+    
     // 创建起始平台
     const startPlatform = new Platform(true)
     startPlatform.setPosition(0, 0, 0)
@@ -671,6 +675,14 @@ export class GameEngine {
 
     // 立即生成第二个平台
     this.generateNextPlatform()
+    
+    // 输出初始平台信息
+    console.log('========== 初始平台位置信息 ==========');
+    this.platforms.forEach((platform, index) => {
+      const pos = platform.getPosition();
+      console.log(`平台 ${index}: x=${pos.x.toFixed(2)}, y=${pos.y.toFixed(2)}, z=${pos.z.toFixed(2)}`);
+    });
+    console.log('==================================');
   }
 
   private animate(): void {
@@ -746,8 +758,10 @@ export class GameEngine {
     // 渲染主场景
     this.renderer.render(this.scene, this.camera)
     
-    // 渲染坐标轴
-    // this.renderAxes() // 注释掉坐标轴渲染，移除右下角的坐标系显示
+    // 注释掉坐标轴渲染代码
+    // if (this.renderAxes) {
+    //   this.renderAxes()
+    // }
   }
 
   private onWindowResize(): void {
@@ -794,17 +808,116 @@ export class GameEngine {
     const lastPlatform = this.platforms[this.platforms.length - 1]
     const lastPosition = lastPlatform.getPosition()
     
+    // 打印当前所有平台位置，帮助诊断问题
+    console.log('-----现有平台位置检查-----');
+    this.platforms.forEach((platform, idx) => {
+      const pos = platform.getPosition();
+      console.log(`平台${idx}: (${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})`);
+    });
+    
     // 随机决定在X轴负方向还是Z轴负方向生成（50%概率）
-    const isXDirection = Math.random() < 0.5
+    let isXDirection = Math.random() < 0.5
     
     // 随机生成4-7之间的距离
-    const distance = Math.floor(Math.random() * (7 - 4 + 1)) + 4
+    let distance = Math.floor(Math.random() * (7 - 4 + 1)) + 4
     
     // 计算新平台的位置
-    const newPosition = {
+    let newPosition = {
       x: lastPosition.x + (isXDirection ? -distance : 0),
       y: 5, // 从Y=5的高度开始下落
       z: lastPosition.z + (isXDirection ? 0 : -distance)
+    }
+
+    // 检查是否与现有平台位置重复
+    let isPositionDuplicate = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 5;
+    
+    do {
+      isPositionDuplicate = false;
+      
+      // 检查是否与任何现有平台位置重复
+      for (let i = 0; i < this.platforms.length; i++) {
+        const existingPos = this.platforms[i].getPosition();
+        if (Math.abs(existingPos.x - newPosition.x) < 0.1 && Math.abs(existingPos.z - newPosition.z) < 0.1) {
+          isPositionDuplicate = true;
+          console.log(`检测到重复位置: 新(${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)}) 与平台${i}(${existingPos.x.toFixed(2)}, ${existingPos.z.toFixed(2)})重复，尝试重新生成...`);
+          break;
+        }
+      }
+      
+      // 如果位置重复，重新生成
+      if (isPositionDuplicate) {
+        attempts++;
+        // 切换方向并重新生成距离
+        isXDirection = !isXDirection;
+        distance = Math.floor(Math.random() * (7 - 4 + 1)) + 4;
+        
+        // 如果尝试次数过多，增加距离范围
+        if (attempts > 2) {
+          distance = Math.floor(Math.random() * (9 - 5 + 1)) + 5;
+        }
+        
+        // 重新计算位置
+        newPosition = {
+          x: lastPosition.x + (isXDirection ? -distance : 0),
+          y: 5,
+          z: lastPosition.z + (isXDirection ? 0 : -distance)
+        };
+        
+        console.log(`重新生成平台位置: 尝试${attempts}次, 新位置(${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)})`);
+      }
+    } while (isPositionDuplicate && attempts < MAX_ATTEMPTS);
+    
+    // 如果多次尝试后仍然重复，强制使用对角线方向
+    if (isPositionDuplicate) {
+      console.log('多次尝试后仍然重复，使用对角线方向...');
+      distance = Math.floor(Math.random() * (6 - 4 + 1)) + 4;
+      newPosition = {
+        x: lastPosition.x - distance,
+        y: 5,
+        z: lastPosition.z - distance
+      };
+      
+      // 额外检查：如果对角线方向仍然重复，增加到更远的距离
+      let stillDuplicate = false;
+      for (let i = 0; i < this.platforms.length; i++) {
+        const existingPos = this.platforms[i].getPosition();
+        if (Math.abs(existingPos.x - newPosition.x) < 0.1 && Math.abs(existingPos.z - newPosition.z) < 0.1) {
+          stillDuplicate = true;
+          console.log(`对角线位置仍然重复，继续增加距离...`);
+          break;
+        }
+      }
+      
+      if (stillDuplicate) {
+        // 使用更远的距离
+        distance = 8 + Math.floor(Math.random() * 4); // 8-11之间的距离
+        newPosition = {
+          x: lastPosition.x - distance,
+          y: 5,
+          z: lastPosition.z - distance
+        };
+        console.log(`使用更远的对角线位置: (${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)})`);
+      }
+    }
+
+    // 再次检查确保没有重复（极端情况处理）
+    let finallyDuplicate = false;
+    for (let i = 0; i < this.platforms.length; i++) {
+      const existingPos = this.platforms[i].getPosition();
+      if (Math.abs(existingPos.x - newPosition.x) < 0.1 && Math.abs(existingPos.z - newPosition.z) < 0.1) {
+        finallyDuplicate = true;
+        console.log(`警告：所有尝试后位置仍然重复！强制移动位置`);
+        // 强制移动到不同位置
+        newPosition.x -= 2;
+        newPosition.z -= 2;
+        break;
+      }
+    }
+    
+    if (finallyDuplicate) {
+      console.log(`最终平台位置: (${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)})`);
     }
 
     // 创建新平台
@@ -821,6 +934,9 @@ export class GameEngine {
     this.scene.add(newPlatform.getMesh())
     this.platforms.push(newPlatform)
     this.player.addPlatform(newPlatform)
+    
+    // 简化平台位置信息的日志输出，只保留基本信息
+    console.log(`新平台生成: (${newPosition.x.toFixed(2)}, ${newPosition.z.toFixed(2)})`);
   }
 
   private showGameOver(): void {
@@ -967,19 +1083,49 @@ export class GameEngine {
   }
 
   private jump(power: number): void {
-    if (this.platforms.length < 2 || this.isGameOver) return // 游戏结束时不允许跳跃
+    // 如果游戏已结束或平台数量不足，不执行跳跃
+    if (this.isGameOver || this.platforms.length < 2) {
+      console.log('游戏已结束或平台数量不足，不执行跳跃');
+      return
+    }
+
+    console.log('========== 跳跃前检查 ==========');
     
+    // 获取当前平台和目标平台
     const currentPlatform = this.platforms[this.currentPlatformIndex]
     const targetPlatform = this.platforms[this.targetPlatformIndex]
     
+    // 获取当前平台和目标平台的位置
     const currentPlatformPos = currentPlatform.getPosition()
     const targetPlatformPos = targetPlatform.getPosition()
-    const playerPosition = this.player.getPosition()
-
-    // 计算平台之间的相对位置
+    
+    console.log(`当前平台${this.currentPlatformIndex}: (${currentPlatformPos.x.toFixed(2)}, ${currentPlatformPos.z.toFixed(2)})`);
+    console.log(`目标平台${this.targetPlatformIndex}: (${targetPlatformPos.x.toFixed(2)}, ${targetPlatformPos.z.toFixed(2)})`);
+    
+    // 检查当前平台和目标平台是否位置相同
+    if (Math.abs(currentPlatformPos.x - targetPlatformPos.x) < 0.1 && 
+        Math.abs(currentPlatformPos.z - targetPlatformPos.z) < 0.1) {
+      console.log('检测到当前平台和目标平台位置相同，跳过这个平台');
+      
+      // 更新索引，跳过这个重复的平台
+      this.currentPlatformIndex = this.targetPlatformIndex;
+      this.targetPlatformIndex++;
+      
+      // 如果目标平台索引超出范围，生成新平台
+      if (this.targetPlatformIndex >= this.platforms.length) {
+        console.log('目标平台索引超出范围，生成新平台');
+        this.generateNextPlatform();
+      }
+      
+      // 递归调用jump，尝试跳到下一个平台
+      console.log('递归调用jump，尝试跳到下一个平台');
+      this.jump(power);
+      return;
+    }
+    
+    // 计算相对位置（目标平台相对于当前平台的位置）
     const deltaX = targetPlatformPos.x - currentPlatformPos.x
     const deltaZ = targetPlatformPos.z - currentPlatformPos.z
-    console.log('[DEBUG] 平台相对位置:', { deltaX, deltaZ });
 
     // 确定跳跃方向
     const direction = new THREE.Vector3()
@@ -1012,7 +1158,7 @@ export class GameEngine {
     console.log('[DEBUG] 归一化后的方向向量:', direction);
     
     const targetPosition = new THREE.Vector3()
-      .copy(playerPosition)
+      .copy(currentPlatformPos)
       .add(direction.multiplyScalar(jumpDistance))
     console.log('[DEBUG] 初始目标位置:', targetPosition);
     
@@ -1035,8 +1181,32 @@ export class GameEngine {
     console.log(`[DEBUG] 开始跳跃: 力度=${power.toFixed(2)}, 距离=${jumpDistance.toFixed(2)}`)
     console.log(`[DEBUG] 目标位置: x=${targetPosition.x.toFixed(2)}, z=${targetPosition.z.toFixed(2)}`)
     
-    this.player.jump(power, targetPosition, this.platforms, (success) => {
+    // 保存目标平台索引，以便在回调中使用
+    const targetPlatformIndex = this.targetPlatformIndex;
+    
+    // 特别重要：在跳跃开始时保存目标平台的确切位置
+    const savedTargetPlatformPos = {
+      x: targetPlatformPos.x,
+      z: targetPlatformPos.z
+    };
+    
+    // 打印当前跳跃信息
+    console.log(`[DEBUG] 准备跳跃: 从平台${this.currentPlatformIndex}(${currentPlatformPos.x.toFixed(2)}, ${currentPlatformPos.z.toFixed(2)})到平台${targetPlatformIndex}(${targetPlatformPos.x.toFixed(2)}, ${targetPlatformPos.z.toFixed(2)})`);
+    
+    // 关键诊断：检查保存的位置和实际平台位置是否一致
+    console.log(`[验证] 目标平台 ${targetPlatformIndex} 保存的位置: (${savedTargetPlatformPos.x.toFixed(2)}, ${savedTargetPlatformPos.z.toFixed(2)})`);
+    console.log(`[验证] 平台数组中的位置: (${this.platforms[targetPlatformIndex].getPosition().x.toFixed(2)}, ${this.platforms[targetPlatformIndex].getPosition().z.toFixed(2)})`);
+    
+    this.player.jump(power, targetPosition, this.platforms, (success: boolean) => {
       if (success) {
+        // 再次检查目标平台的位置，确保在跳跃完成时位置仍然准确
+        console.log(`[验证-回调] 目标平台 ${targetPlatformIndex} 保存的位置: (${savedTargetPlatformPos.x.toFixed(2)}, ${savedTargetPlatformPos.z.toFixed(2)})`);
+        if (targetPlatformIndex < this.platforms.length) {
+          console.log(`[验证-回调] 平台数组中的位置: (${this.platforms[targetPlatformIndex].getPosition().x.toFixed(2)}, ${this.platforms[targetPlatformIndex].getPosition().z.toFixed(2)})`);
+        } else {
+          console.log(`[错误] 目标平台索引 ${targetPlatformIndex} 超出平台数组范围 ${this.platforms.length}`);
+        }
+
         // 在成功着陆时播放音效和粒子效果
         this.audioManager.playLandingSound()
         this.particleSystem.emit(new THREE.Vector3(
@@ -1045,16 +1215,47 @@ export class GameEngine {
           targetPosition.z
         ))
 
+        // 强制更新棋子位置到目标平台中心点 - 使用保存的位置而不是重新获取
+        this.player.setPosition(savedTargetPlatformPos.x, 1, savedTargetPlatformPos.z);
+        
+        // 详细记录跳跃成功信息
+        console.log(`跳跃成功: 棋子已移动到平台 ${targetPlatformIndex} (${savedTargetPlatformPos.x.toFixed(2)}, ${savedTargetPlatformPos.z.toFixed(2)})`);
+        console.log(`跳跃前索引: currentPlatformIndex=${this.currentPlatformIndex}, targetPlatformIndex=${targetPlatformIndex}`);
+
         // 更新平台索引
-        this.currentPlatformIndex = this.targetPlatformIndex
-        this.targetPlatformIndex++
+        this.currentPlatformIndex = targetPlatformIndex;
+        this.targetPlatformIndex = targetPlatformIndex + 1;
+        
+        console.log(`跳跃后索引: currentPlatformIndex=${this.currentPlatformIndex}, targetPlatformIndex=${this.targetPlatformIndex}`);
+        
+        // 获取当前的目标平台（使用保存的索引）
+        const currentTargetPlatform = this.platforms[targetPlatformIndex];
+        
+        // 重要：检查平台是否存在于数组中
+        if (!currentTargetPlatform) {
+          console.error(`找不到目标平台: 索引=${targetPlatformIndex}, 平台数组长度=${this.platforms.length}`);
+        }
         
         // 更新玩家当前所在的平台
-        this.player.setCurrentPlatform(targetPlatform)
-        this.updateScore(this.score + 1)
+        this.player.setCurrentPlatform(currentTargetPlatform);
+        this.updateScore(this.score + 1);
+        
+        // 在生成新平台之前再次打印所有平台位置
+        console.log('===== 生成新平台前: 所有平台位置 =====');
+        this.platforms.forEach((platform, idx) => {
+          const pos = platform.getPosition();
+          console.log(`平台 ${idx}: (${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})`);
+        });
         
         // 生成下一个平台
-        this.generateNextPlatform()
+        this.generateNextPlatform();
+        
+        // 生成平台后再次打印所有平台位置
+        console.log('===== 生成新平台后: 所有平台位置 =====');
+        this.platforms.forEach((platform, idx) => {
+          const pos = platform.getPosition();
+          console.log(`平台 ${idx}: (${pos.x.toFixed(2)}, ${pos.z.toFixed(2)})`);
+        });
 
         // 开始相机移动
         this.startCameraMovement(deltaX, deltaZ)
@@ -1519,6 +1720,23 @@ export class GameEngine {
     } else if (type === 'model') {
       titleElement.textContent = '棋子3D模型替换';
       this.secondarySidebarElement.appendChild(titleElement);
+      
+      // 直接加载并渲染测试模型
+      const testModelPath = './models/demo/test.glb';
+      console.log('正在加载测试模型:', testModelPath);
+      
+      // 添加状态提示
+      const testModelStatus = document.createElement('div');
+      testModelStatus.style.padding = '10px';
+      testModelStatus.style.backgroundColor = '#e3f2fd';
+      testModelStatus.style.borderRadius = '4px';
+      testModelStatus.style.marginBottom = '20px';
+      testModelStatus.style.color = '#0d47a1';
+      testModelStatus.textContent = '正在加载测试模型...';
+      this.secondarySidebarElement.appendChild(testModelStatus);
+      
+      // 加载测试模型
+      this.load3DModelAndReplace(testModelPath, testModelStatus);
       
       // 创建3D模型生成表单
       const form = document.createElement('form');
@@ -2378,7 +2596,7 @@ export class GameEngine {
     const playerMesh = this.player.getMesh();
     
     // 遍历棋子的所有子对象
-    playerMesh.traverse((child) => {
+    playerMesh.traverse((child: THREE.Object3D) => {
       if (child instanceof THREE.Mesh && child.material) {
         // 创建新材质以替换旧材质
         const oldMaterial = child.material as THREE.MeshPhongMaterial;
@@ -2623,15 +2841,70 @@ export class GameEngine {
   
   // 加载3D模型并替换棋子
   private load3DModelAndReplace(objFilePath: string, statusContainerRef?: HTMLDivElement): void {
-    // 将OBJ文件路径转换为GLB文件路径
-    const glbFilePath = objFilePath.replace('.obj', '.glb');
+    // 检查是否是本地测试模型
+    const isLocalTestModel = objFilePath.includes('/demo/test.glb');
+    
+    // 将OBJ文件路径转换为GLB文件路径（如果不是本地测试模型）
+    const glbFilePath = isLocalTestModel ? objFilePath : objFilePath.replace('.obj', '.glb');
     console.log('开始加载3D模型(GLB):', glbFilePath);
+    
+    if (statusContainerRef) {
+      statusContainerRef.textContent = '正在加载3D模型...';
+      statusContainerRef.style.color = '#2196F3';
+    }
     
     // 创建纹理加载器并设置跨域
     const textureLoader = new THREE.TextureLoader();
     textureLoader.crossOrigin = 'anonymous';
     
-    // 检查文件是否存在
+    // 如果是本地测试模型，直接加载，不检查文件是否存在
+    if (isLocalTestModel) {
+      console.log('加载本地测试模型，跳过文件存在检查');
+      import('three/examples/jsm/loaders/GLTFLoader')
+        .then((module) => {
+          // 创建GLTF加载器
+          const loader = new module.GLTFLoader();
+          
+          // 设置跨域请求
+          loader.setCrossOrigin('anonymous');
+          
+          // 设置资源路径
+          const resourcePath = glbFilePath.substring(0, glbFilePath.lastIndexOf('/') + 1);
+          loader.setResourcePath(resourcePath);
+          
+          // 加载GLB文件
+          loader.load(
+            glbFilePath,
+            (gltf) => this.handleLoadedModel(gltf, statusContainerRef),
+            (xhr) => {
+              const percentComplete = Math.round((xhr.loaded / xhr.total) * 100);
+              console.log(`模型加载进度: ${percentComplete}%`);
+              if (statusContainerRef) {
+                statusContainerRef.textContent = `加载进度: ${percentComplete}%`;
+              }
+            },
+            (error) => {
+              console.error('加载3D模型时出错:', error);
+              if (statusContainerRef) {
+                statusContainerRef.textContent = '加载3D模型失败，使用备用模型';
+                statusContainerRef.style.color = 'red';
+              }
+              this.loadFallbackModel(statusContainerRef);
+            }
+          );
+        })
+        .catch(error => {
+          console.error('加载GLTFLoader时出错:', error);
+          if (statusContainerRef) {
+            statusContainerRef.textContent = '加载3D模型失败，使用备用模型';
+            statusContainerRef.style.color = 'red';
+          }
+          this.loadFallbackModel(statusContainerRef);
+        });
+      return;
+    }
+    
+    // 对于远程模型，检查文件是否存在
     fetch(glbFilePath, { method: 'HEAD' })
       .then(response => {
         if (!response.ok) {
@@ -2639,11 +2912,11 @@ export class GameEngine {
         }
         
         // 文件存在，继续加载
-        return import('three/addons/loaders/GLTFLoader.js');
+        return import('three/examples/jsm/loaders/GLTFLoader');
       })
-      .then(({ GLTFLoader }) => {
+      .then((module) => {
         // 创建GLTF加载器
-        const loader = new GLTFLoader();
+        const loader = new module.GLTFLoader();
         
         // 设置跨域请求
         loader.setCrossOrigin('anonymous');
@@ -2673,7 +2946,7 @@ export class GameEngine {
               }
               
               // 修复模型 - 遍历所有网格，检查并修复几何体和材质
-              model.traverse((child) => {
+              model.traverse((child: THREE.Object3D) => {
                 if (child instanceof THREE.Mesh) {
                   const mesh = child as THREE.Mesh;
                   
@@ -2947,27 +3220,22 @@ export class GameEngine {
         }
       });
       
-      // 创建一个辅助对象来可视化模型的位置
-      const positionHelper = new THREE.AxesHelper(1);
-      newModel.add(positionHelper);
-      console.log('已添加坐标轴辅助器到模型');
+      // 将模型大小放大到2倍
+      newModel.scale.set(2, 2, 2);
+      console.log('模型大小已放大到2倍');
       
-      // 创建一个边界盒辅助对象来可视化模型的边界
-      const boundingBox = new THREE.Box3().setFromObject(newModel);
-      const boundingBoxHelper = new THREE.Box3Helper(boundingBox, new THREE.Color(0x00ff00));
-      this.scene.add(boundingBoxHelper);
-      console.log('已添加边界盒辅助器到场景');
+      // 移除坐标轴辅助器代码
+      // 不再添加坐标轴辅助器到模型
+      
+      // 移除边界盒辅助器代码
+      // 不再添加边界盒辅助器到场景
       
       // 获取当前玩家位置
       const currentPosition = this.player.getPosition();
       console.log('当前玩家位置:', currentPosition);
       
-      // 保存模型的原始Y轴位置
-      const originalY = newModel.position.y;
-      console.log('模型原始Y轴位置:', originalY);
-      
-      // 设置新模型位置，保留Y轴位置
-      newModel.position.set(currentPosition.x, originalY, currentPosition.z);
+      // 设置新模型位置，Y轴位置设为1（平台高度）
+      newModel.position.set(currentPosition.x, 1, currentPosition.z);
       console.log('设置模型新位置:', newModel.position);
       
       // 确保模型可见
@@ -2985,9 +3253,15 @@ export class GameEngine {
       this.scene.add(newModel);
       console.log('新模型已添加到场景');
       
-      // 设置玩家的自定义模型
+      // 设置模型位置
+      const currentPlayerPosition = this.player.getPosition().clone();
+      
+      // 直接将模型传递给 player.setCustomModel 方法
+      // 不再需要在这里设置位置，因为 setCustomModel 会处理
       this.player.setCustomModel(newModel);
-      console.log('玩家模型已更新');
+      
+      // 记录日志
+      console.log(`[GameEngine] 成功替换玩家模型，当前位置: ${currentPlayerPosition.x.toFixed(2)}, ${currentPlayerPosition.y.toFixed(2)}, ${currentPlayerPosition.z.toFixed(2)}`);
       
       // 重置游戏状态
       this.isPressing = false;
@@ -3002,7 +3276,7 @@ export class GameEngine {
         statusContainerRef.style.color = '#4CAF50';
       }
       
-      // 打印模型的详细信息
+      // 打印模型的详细信息，但不再包含边界盒信息
       console.log('模型详细信息:', {
         position: {
           x: newModel.position.x.toFixed(2),
@@ -3013,23 +3287,6 @@ export class GameEngine {
           x: newModel.scale.x.toFixed(2),
           y: newModel.scale.y.toFixed(2),
           z: newModel.scale.z.toFixed(2)
-        },
-        boundingBox: {
-          min: {
-            x: boundingBox.min.x.toFixed(2),
-            y: boundingBox.min.y.toFixed(2),
-            z: boundingBox.min.z.toFixed(2)
-          },
-          max: {
-            x: boundingBox.max.x.toFixed(2),
-            y: boundingBox.max.y.toFixed(2),
-            z: boundingBox.max.z.toFixed(2)
-          },
-          size: {
-            x: (boundingBox.max.x - boundingBox.min.x).toFixed(2),
-            y: (boundingBox.max.y - boundingBox.min.y).toFixed(2),
-            z: (boundingBox.max.z - boundingBox.min.z).toFixed(2)
-          }
         }
       });
       
@@ -3042,6 +3299,133 @@ export class GameEngine {
         statusContainerRef.style.color = '#F44336';
       }
       
+      this.loadFallbackModel(statusContainerRef);
+    }
+  }
+
+  // 处理加载成功的模型
+  private handleLoadedModel(gltf: any, statusContainerRef?: HTMLDivElement): void {
+    try {
+      console.log('3D模型(GLB)加载成功，开始处理模型');
+      
+      // 获取模型的场景对象
+      const model = gltf.scene;
+      
+      // 检查模型是否有效
+      if (!model || !model.children || model.children.length === 0) {
+        console.error('加载的3D模型无效或为空');
+        if (statusContainerRef) {
+          statusContainerRef.textContent = '加载的3D模型无效或为空';
+          statusContainerRef.style.color = 'red';
+        }
+        return;
+      }
+      
+      // 修复模型 - 遍历所有网格，检查并修复几何体和材质
+      model.traverse((child: THREE.Object3D) => {
+        if (child instanceof THREE.Mesh) {
+          const mesh = child as THREE.Mesh;
+          
+          // 检查几何体
+          if (mesh.geometry) {
+            const geometry = mesh.geometry;
+            
+            // 检查位置属性是否存在
+            const positionAttribute = geometry.getAttribute('position');
+            if (positionAttribute) {
+              const positions = positionAttribute.array;
+              let hasNaN = false;
+              
+              // 检查NaN值
+              for (let i = 0; i < positions.length; i++) {
+                if (isNaN(positions[i])) {
+                  console.warn(`发现NaN值在位置属性中，索引: ${i}`);
+                  // 将NaN值替换为0
+                  positions[i] = 0;
+                  hasNaN = true;
+                }
+              }
+              
+              if (hasNaN) {
+                positionAttribute.needsUpdate = true;
+                console.log('已修复NaN值');
+              }
+            }
+          }
+          
+          // 检查材质
+          if (mesh.material) {
+            // 修复材质纹理
+            if (Array.isArray(mesh.material)) {
+              // 如果是材质数组，遍历每个材质
+              mesh.material.forEach(mat => this.fixMaterialTextures(mat));
+            } else {
+              // 单个材质
+              this.fixMaterialTextures(mesh.material);
+            }
+          }
+          
+          // 设置阴影
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+        }
+      });
+      
+      // 计算模型的边界盒，用于缩放
+      const box = new THREE.Box3().setFromObject(model);
+      const size = new THREE.Vector3();
+      box.getSize(size);
+      
+      // 计算缩放比例，使模型高度为1单位
+      const maxDimension = Math.max(size.x, size.y, size.z);
+      const scale = 1 / maxDimension;
+      
+      // 应用缩放
+      model.scale.set(scale, scale, scale);
+      
+      // 重新计算缩放后的边界盒
+      const scaledBox = new THREE.Box3().setFromObject(model);
+      const scaledSize = new THREE.Vector3();
+      scaledBox.getSize(scaledSize);
+      
+      console.log('模型原始尺寸:', {
+        x: size.x.toFixed(2),
+        y: size.y.toFixed(2),
+        z: size.z.toFixed(2)
+      });
+      
+      console.log('缩放后尺寸:', {
+        x: scaledSize.x.toFixed(2),
+        y: scaledSize.y.toFixed(2),
+        z: scaledSize.z.toFixed(2)
+      });
+      
+      // 计算Y轴偏移，使模型底部与地面对齐
+      const yOffset = -scaledBox.min.y;
+      
+      // 设置模型位置
+      model.position.set(0, yOffset, 0);
+      
+      console.log('模型位置已调整:', {
+        x: model.position.x.toFixed(2),
+        y: model.position.y.toFixed(2),
+        z: model.position.z.toFixed(2)
+      });
+      
+      // 替换玩家模型
+      this.replacePlayerModel(model, statusContainerRef);
+      console.log('模型替换完成');
+      
+      if (statusContainerRef) {
+        statusContainerRef.textContent = '3D模型加载成功！';
+        statusContainerRef.style.color = 'green';
+      }
+    } catch (error) {
+      console.error('处理3D模型时出错:', error);
+      if (statusContainerRef) {
+        statusContainerRef.textContent = '处理3D模型失败，使用备用模型';
+        statusContainerRef.style.color = 'red';
+      }
       this.loadFallbackModel(statusContainerRef);
     }
   }

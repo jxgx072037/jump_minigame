@@ -26,14 +26,26 @@ export TENCENT_SECRET_KEY="你的腾讯云SecretKey"
 ## 安装依赖
 
 ```bash
-npm install
+npm install express cors tencentcloud-sdk-nodejs-hunyuan
 ```
 
-执行以下命令启动游戏和各个服务：
+## 启动服务
+
 ```bash
-npm run dev:all
+node demoFiles/imageGenerationServer.js
 ```
 
+服务器将在 http://localhost:3002 上运行。
+
+## 使用方法
+
+1. 启动服务器：
+
+```bash
+node imageGenerationServer.js
+```
+
+服务器将在 http://localhost:3002 上运行。
 
 ## 测试界面
 

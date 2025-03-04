@@ -23,6 +23,12 @@ dist-ssr
 *.sln
 *.sw?
 
-# 忽略models目录中的所有文件，但保留目录本身
+# 忽略models目录中的所有文件，但保留目录本身及特定子目录
 models/*
 !models/.gitkeep
+# 保留demo目录
+!models/demo/
+# 保留demo目录下的所有文件
+!models/demo/*
+# 明确保留test.glb文件
+!models/demo/test.glb

@@ -104,36 +104,11 @@ export class Player {
       // 如果边界盒太小，设置一个最小尺寸
       const minSize = 0.5;
       if (size.x < minSize || size.y < minSize || size.z < minSize) {
-        console.log('边界盒太小，设置最小尺寸');
         this.boundingBox.set(
           new THREE.Vector3(center.x - minSize/2, center.y - minSize/2, center.z - minSize/2),
           new THREE.Vector3(center.x + minSize/2, center.y + minSize/2, center.z + minSize/2)
         );
       }
-      
-      // 打印边界盒详细信息
-      console.log('自定义模型边界盒详情:', {
-        min: {
-          x: this.boundingBox.min.x.toFixed(2),
-          y: this.boundingBox.min.y.toFixed(2),
-          z: this.boundingBox.min.z.toFixed(2)
-        },
-        max: {
-          x: this.boundingBox.max.x.toFixed(2),
-          y: this.boundingBox.max.y.toFixed(2),
-          z: this.boundingBox.max.z.toFixed(2)
-        },
-        center: {
-          x: center.x.toFixed(2),
-          y: center.y.toFixed(2),
-          z: center.z.toFixed(2)
-        },
-        size: {
-          x: size.x.toFixed(2),
-          y: size.y.toFixed(2),
-          z: size.z.toFixed(2)
-        }
-      });
     } else {
       // 使用默认棋子的边界
       // 计算身体的边界
@@ -143,20 +118,6 @@ export class Player {
       // 计算悬浮球的边界
       const ballBoundingBox = new THREE.Box3().setFromObject(this.floatingBall);
       this.boundingBox.union(ballBoundingBox);
-      
-      // 打印默认棋子边界盒信息
-      console.log('默认棋子边界盒详情:', {
-        min: {
-          x: this.boundingBox.min.x.toFixed(2),
-          y: this.boundingBox.min.y.toFixed(2),
-          z: this.boundingBox.min.z.toFixed(2)
-        },
-        max: {
-          x: this.boundingBox.max.x.toFixed(2),
-          y: this.boundingBox.max.y.toFixed(2),
-          z: this.boundingBox.max.z.toFixed(2)
-        }
-      });
     }
     
     // 更新边界盒辅助对象
@@ -166,10 +127,8 @@ export class Player {
       this.boundingBoxHelper = new THREE.Box3Helper(this.boundingBox, 0xffff00);
     }
     
-    // 打印边界盒信息
     const size = new THREE.Vector3();
     this.boundingBox.getSize(size);
-    console.log('更新边界盒，尺寸:', size);
   }
 
   // 获取碰撞边界
@@ -210,23 +169,15 @@ export class Player {
         // 从平台高度1逐渐降低到地面高度0
         const currentY = Math.max(0, this.fallStartY * (1 - this.fallProgress))
         this.mesh.position.y = currentY
-        
-        console.log(`[DEBUG] 自定义模型下落: progress=${this.fallProgress.toFixed(2)}, y=${currentY.toFixed(2)}`);
       }
 
       if (this.isJumping) {
         this.jumpProgress += deltaTime / this.jumpDuration
         
-        // 每隔一段时间记录跳跃进度
-        if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
-          console.log('[DEBUG] 自定义模型跳跃进度:', this.jumpProgress.toFixed(2));
-        }
-        
         if (this.jumpProgress >= 1) {
           this.jumpProgress = 1
           this.isJumping = false
           this.isFlipping = false // 确保翻转动画结束
-          console.log('[DEBUG] 自定义模型跳跃完成');
           
           // 重置旋转，确保模型回到正常姿态
           this.mesh.rotation.x = 0;
@@ -239,11 +190,9 @@ export class Player {
           
           // 将玩家移动到目标位置
           this.setPosition(targetPos.x, targetPos.y, targetPos.z)
-          console.log('[DEBUG] 设置最终位置:', targetPos);
           
           // 获取最新的玩家位置（可能与目标位置略有不同）
           const playerPos = this.getPosition()
-          console.log('[DEBUG] 实际最终位置:', playerPos);
           
           // 检查是否在任何平台上
           let isOnAnyPlatform = false
@@ -257,11 +206,12 @@ export class Player {
           // 打印调试信息
           this.printDebugInfo(this.platforms)
           
+          // 强制确保位置正确
           if (isOnAnyPlatform) {
             // 如果在任何平台范围内，保持y=1
             // 跳跃成功
+            this.setPosition(playerPos.x, 1, playerPos.z) // 确保Y坐标为1
             if (this.onJumpComplete) {
-              console.log('[DEBUG] 跳跃判定: 成功')
               this.onJumpComplete(true)
             }
           } else {
@@ -269,7 +219,6 @@ export class Player {
             this.setPosition(playerPos.x, 0, playerPos.z)
             // 跳跃失败
             if (this.onJumpComplete) {
-              console.log('[DEBUG] 跳跃判定: 失败')
               this.onJumpComplete(false)
             }
           }
@@ -291,17 +240,6 @@ export class Player {
         // 使用正弦函数来创建更接近半圆的曲线
         const currentY = 1 + height * Math.sin(Math.PI * t)
         
-        // 每隔一段时间记录位置
-        if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
-          console.log('[DEBUG] 自定义模型跳跃轨迹:', {
-            progress: t.toFixed(2),
-            x: currentX.toFixed(2),
-            y: currentY.toFixed(2),
-            z: currentZ.toFixed(2),
-            height: height.toFixed(2)
-          });
-        }
-
         this.mesh.position.set(currentX, currentY, currentZ)
 
         // 计算移动方向
@@ -337,19 +275,11 @@ export class Player {
           // 如果是向-X方向移动，需要反向翻转
           const rotationAxis = new THREE.Vector3(0, 0, Math.sign(moveDirection.x));
           flipQuaternion.setFromAxisAngle(rotationAxis, flipAngle);
-          
-          if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
-            console.log('[DEBUG] 自定义模型X轴方向前空翻, 方向:', Math.sign(moveDirection.x) > 0 ? '正X' : '负X');
-          }
         } else {
           // 主要沿Z轴移动，绕X轴的垂直轴翻转
           // 如果是向-Z方向移动，需要反向翻转
           const rotationAxis = new THREE.Vector3(Math.sign(moveDirection.z), 0, 0);
           flipQuaternion.setFromAxisAngle(rotationAxis, flipAngle);
-          
-          if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
-            console.log('[DEBUG] 自定义模型Z轴方向前空翻, 方向:', Math.sign(moveDirection.z) > 0 ? '正Z' : '负Z');
-          }
         }
         
         // 应用翻转旋转
@@ -358,14 +288,6 @@ export class Player {
         // 恢复原始Y轴旋转（朝向）
         this.mesh.rotation.y = originalRotationY;
         
-        if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
-          console.log('[DEBUG] 自定义模型执行翻转:', {
-            progress: flipT.toFixed(2),
-            angle: (flipAngle * 180 / Math.PI).toFixed(2) + '度'
-          });
-        }
-
-        // 更新碰撞边界
         this.updateBoundingBox()
       }
       
@@ -404,16 +326,10 @@ export class Player {
     if (this.isJumping) {
       this.jumpProgress += deltaTime / this.jumpDuration
       
-      // 每隔一段时间记录跳跃进度
-      if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
-        console.log('[DEBUG] 跳跃进度:', this.jumpProgress.toFixed(2));
-      }
-      
       if (this.jumpProgress >= 1) {
         this.jumpProgress = 1
         this.isJumping = false
         this.isFlipping = false // 确保翻转动画结束
-        console.log('[DEBUG] 跳跃完成');
         
         // 重置旋转，确保棋子回到正常姿态
         this.mesh.rotation.x = 0;
@@ -426,11 +342,9 @@ export class Player {
         
         // 将玩家移动到目标位置
         this.setPosition(targetPos.x, targetPos.y, targetPos.z)
-        console.log('[DEBUG] 设置最终位置:', targetPos);
         
         // 获取最新的玩家位置（可能与目标位置略有不同）
         const playerPos = this.getPosition()
-        console.log('[DEBUG] 实际最终位置:', playerPos);
         
         // 检查是否在任何平台上
         let isOnAnyPlatform = false
@@ -450,7 +364,6 @@ export class Player {
           // 如果在任何平台范围内，保持y=1
           // 跳跃成功
           if (this.onJumpComplete) {
-            console.log('[DEBUG] 跳跃判定: 成功')
             this.onJumpComplete(true)
           }
         } else {
@@ -458,7 +371,6 @@ export class Player {
           this.setPosition(playerPos.x, 0, playerPos.z)
           // 跳跃失败
           if (this.onJumpComplete) {
-            console.log('[DEBUG] 跳跃判定: 失败')
             this.onJumpComplete(false)
           }
         }
@@ -480,17 +392,6 @@ export class Player {
       // 使用正弦函数来创建更接近半圆的曲线
       const currentY = 1 + height * Math.sin(Math.PI * t)
       
-      // 每隔一段时间记录位置
-      if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
-        console.log('[DEBUG] 跳跃轨迹:', {
-          progress: t.toFixed(2),
-          x: currentX.toFixed(2),
-          y: currentY.toFixed(2),
-          z: currentZ.toFixed(2),
-          height: height.toFixed(2)
-        });
-      }
-
       this.mesh.position.set(currentX, currentY, currentZ)
 
       // 计算移动方向
@@ -526,19 +427,11 @@ export class Player {
         // 如果是向-X方向移动，需要反向翻转
         const rotationAxis = new THREE.Vector3(0, 0, Math.sign(moveDirection.x));
         flipQuaternion.setFromAxisAngle(rotationAxis, flipAngle);
-        
-        if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
-          console.log('[DEBUG] X轴方向前空翻, 方向:', Math.sign(moveDirection.x) > 0 ? '正X' : '负X');
-        }
       } else {
         // 主要沿Z轴移动，绕X轴的垂直轴翻转
         // 如果是向-Z方向移动，需要反向翻转
         const rotationAxis = new THREE.Vector3(Math.sign(moveDirection.z), 0, 0);
         flipQuaternion.setFromAxisAngle(rotationAxis, flipAngle);
-        
-        if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
-          console.log('[DEBUG] Z轴方向前空翻, 方向:', Math.sign(moveDirection.z) > 0 ? '正Z' : '负Z');
-        }
       }
       
       // 应用翻转旋转
@@ -547,14 +440,6 @@ export class Player {
       // 恢复原始Y轴旋转（朝向）
       this.mesh.rotation.y = originalRotationY;
       
-      if (Math.floor(this.jumpProgress * 10) % 2 === 0) {
-        console.log('[DEBUG] 执行翻转:', {
-          progress: flipT.toFixed(2),
-          angle: (flipAngle * 180 / Math.PI).toFixed(2) + '度'
-        });
-      }
-
-      // 更新碰撞边界
       this.updateBoundingBox()
     }
   }
@@ -597,8 +482,6 @@ export class Player {
       // 当缩放减小时，需要降低模型的Y位置以保持底部固定
       const baseY = 1; // 基础高度（平台高度）
       this.mesh.position.y = baseY + (height * (1 - scale)) / 2;
-      
-      console.log(`[DEBUG] 自定义模型缩放: scale=${scale}, height=${height}, position.y=${this.mesh.position.y}`);
     } else {
       // 原始模型的处理逻辑保持不变
       this.body.scale.y = 1;
@@ -629,8 +512,6 @@ export class Player {
   ): void {
     if (this.isJumping) return
     
-    console.log('[DEBUG] Player.jump 被调用，力度:', power);
-    
     this.isCharging = false
     this.isJumping = true
     this.jumpProgress = 0
@@ -649,16 +530,6 @@ export class Player {
     this.isFlipping = false
     this.flipProgress = 0
     
-    console.log('[DEBUG] 跳跃参数:', {
-      jumpPower: this.jumpPower,
-      jumpStartPosition: this.jumpStartPosition,
-      jumpTargetPosition: this.jumpTargetPosition,
-      jumpDistance,
-      jumpDuration: this.jumpDuration,
-      jumpSpeed: this.JUMP_SPEED,
-      customModel: this.customModel ? '已设置' : '未设置'
-    });
-    
     // 无论是否为自定义模型，都重置缩放
     this.scale(1)
   }
@@ -666,26 +537,15 @@ export class Player {
   // 在跳跃完成时打印位置信息
   private printDebugInfo(platforms: Platform[]): void {
     const playerPos = this.getPosition()
-    console.log('--- 调试信息 ---')
-    console.log(`棋子位置: x=${playerPos.x.toFixed(2)}, z=${playerPos.z.toFixed(2)}`)
     
     // 打印所有平台的位置信息
     platforms.forEach((platform, index) => {
       const platformPos = platform.getPosition()
       const size = new THREE.Vector3(2.5, 1.0, 2.5) // 平台的固定尺寸
       
-      console.log(`平台 ${index} 中心点: x=${platformPos.x.toFixed(2)}, z=${platformPos.z.toFixed(2)}`)
-      console.log(`平台 ${index} 边角坐标:`)
-      console.log(`  左前: x=${(platformPos.x - size.x/2).toFixed(2)}, z=${(platformPos.z - size.z/2).toFixed(2)}`)
-      console.log(`  右前: x=${(platformPos.x + size.x/2).toFixed(2)}, z=${(platformPos.z - size.z/2).toFixed(2)}`)
-      console.log(`  左后: x=${(platformPos.x - size.x/2).toFixed(2)}, z=${(platformPos.z + size.z/2).toFixed(2)}`)
-      console.log(`  右后: x=${(platformPos.x + size.x/2).toFixed(2)}, z=${(platformPos.z + size.z/2).toFixed(2)}`)
-      
       // 计算并打印棋子是否在此平台上的判断结果
       const isOnPlatform = platform.isPointOnPlatform(playerPos)
-      console.log(`棋子是否在平台 ${index} 上: ${isOnPlatform ? '是' : '否'}`)
     })
-    console.log('---------------')
   }
 
   // 设置当前平台的引用
@@ -719,9 +579,6 @@ export class Player {
     // 重置之前的旋转，保留Y轴旋转角度（朝向）
     const originalRotationY = this.mesh.rotation.y
     this.mesh.rotation.set(0, originalRotationY, 0)
-    
-    console.log(`[DEBUG] ${this.customModel ? '自定义模型' : '标准棋子'}开始倒下，方向:`, 
-      this.fallDirection, '起始高度:', this.fallStartY);
   }
 
   // 获取当前自定义模型
@@ -737,11 +594,6 @@ export class Player {
       const currentRotation = this.mesh.rotation.clone();
       const currentScale = this.mesh.scale.clone();
       
-      // 移除旧模型的所有子对象
-      while (this.mesh.children.length > 0) {
-        this.mesh.remove(this.mesh.children[0]);
-      }
-      
       // 清除之前的自定义模型引用
       if (this.customModel) {
         // 如果之前有自定义模型，确保它不再被引用
@@ -751,20 +603,17 @@ export class Player {
       // 保存新的自定义模型引用
       this.customModel = model;
       
-      // 如果模型是Group类型，我们将其子对象添加到当前mesh
-      if (model instanceof THREE.Group) {
-        // 复制所有子对象到当前mesh
-        model.children.forEach(child => {
-          this.mesh.add(child.clone());
-        });
-      } else {
-        // 如果不是Group，直接添加整个模型
-        this.mesh.add(model.clone());
+      // 清空当前mesh中的所有子对象
+      while (this.mesh.children.length > 0) {
+        this.mesh.remove(this.mesh.children[0]);
       }
       
-      // 恢复位置和旋转，但保留模型的 Y 轴位置
-      const originalY = model.position.y;
-      this.mesh.position.set(currentPosition.x, originalY, currentPosition.z);
+      // 直接使用传入的模型，不再创建克隆
+      // 这样可以避免在场景中出现多个相同的模型
+      this.mesh.add(model);
+      
+      // 恢复位置和旋转，Y轴位置设为1（平台高度）
+      this.mesh.position.set(currentPosition.x, 1, currentPosition.z);
       this.mesh.rotation.copy(currentRotation);
       this.mesh.scale.copy(currentScale);
       
@@ -779,8 +628,6 @@ export class Player {
       this.isCharging = false;
       this.isFalling = false;
       this.isFlipping = false;
-      
-      console.log('棋子模型已替换为自定义3D模型，子对象数量:', this.mesh.children.length);
     } catch (error) {
       console.error('设置自定义模型时出错:', error);
     }
