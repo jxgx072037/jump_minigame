@@ -675,11 +675,11 @@ export class GameEngine {
     this.ground = ground
 
     // 在地面上随机添加100个长方体
-    for (let i = 0; i < 100; i++) {
-      // 随机生成长方体的尺寸(5-20之间)
-      const width = 5 + Math.random() * 15
-      const height = 5 + Math.random() * 15 
-      const depth = 5 + Math.random() * 15
+    for (let i = 0; i < 200; i++) {
+      // 随机生成长方体的尺寸(5-15之间)
+      const width = 5 + Math.random() * 10
+      const height = 5 + Math.random() * 10
+      const depth = 5 + Math.random() * 10
 
       // 创建长方体几何体和材质
       const boxGeometry = new THREE.BoxGeometry(width, height, depth)
@@ -1277,6 +1277,11 @@ export class GameEngine {
     // 移除所有事件监听器，确保完全停止交互
     this.removeEventListeners()
     
+    // 停止背景音乐
+    if (this.audioManager) {
+      this.audioManager.stopBackgroundMusic()
+    }
+    
     // 立即播放失败音效
     this.audioManager.playGameOverSound()
     
@@ -1754,11 +1759,18 @@ export class GameEngine {
       globalGameStarted: GameEngine.GLOBAL_GAME_STARTED 
     });
     
-    // 激活音频上下文，确保第一次蓄力时能够播放声音
+    // 激活音频上下文，确保能够播放声音
     if (this.audioManager) {
       console.log(`[DEBUG] 实例 ${this.instanceId}: 激活音频上下文`);
-      // 播放一个静音的测试音效来激活音频上下文
+      // 播放一个测试音效来激活音频上下文
       this.audioManager.playTestSound();
+      
+      // 等待一小段时间后尝试播放背景音乐
+      // 这样可以确保用户已经与页面交互，并且音频上下文有时间被激活
+      setTimeout(() => {
+        console.log(`[DEBUG] 实例 ${this.instanceId}: 开始播放背景音乐`);
+        this.audioManager.playBackgroundMusic('src/assets/sounds/love.mp3');
+      }, 500);
     }
     
     // 移除现有的事件监听器
@@ -1798,11 +1810,18 @@ export class GameEngine {
       globalGameStarted: GameEngine.GLOBAL_GAME_STARTED 
     });
     
-    // 激活音频上下文，确保第一次蓄力时能够播放声音
+    // 激活音频上下文，确保能够播放声音
     if (this.audioManager) {
       console.log(`[DEBUG] 实例 ${this.instanceId}: 激活音频上下文`);
-      // 播放一个静音的测试音效来激活音频上下文
+      // 播放一个测试音效来激活音频上下文
       this.audioManager.playTestSound();
+      
+      // 等待一小段时间后尝试播放背景音乐
+      // 这样可以确保用户已经与页面交互，并且音频上下文有时间被激活
+      setTimeout(() => {
+        console.log(`[DEBUG] 实例 ${this.instanceId}: 开始播放背景音乐`);
+        this.audioManager.playBackgroundMusic('src/assets/sounds/love.mp3');
+      }, 500);
     }
     
     // 移除现有的事件监听器

@@ -8,6 +8,10 @@ export class AudioManager {
   private chargingGain: GainNode | null = null
   private isChargingSoundPlaying: boolean = false
   private maxChargePlayed: boolean = false // 添加标志，避免重复播放最大蓄力音效
+  // 添加背景音乐相关属性
+  private backgroundMusicSource: AudioBufferSourceNode | null = null
+  private backgroundMusicGain: GainNode | null = null
+  private isBackgroundMusicPlaying: boolean = false
 
   constructor() {
     // 检测是否为微信浏览器
@@ -387,5 +391,154 @@ export class AudioManager {
     // 开始播放并在指定时间停止
     triangleOsc.start(startTime)
     triangleOsc.stop(startTime + duration)
+  }
+
+  // 播放背景音乐
+  public playBackgroundMusic(audioPath: string): void {
+    if (!this.audioContext) {
+      console.warn('音频上下文未初始化，无法播放背景音乐')
+      return
+    }
+    
+    // 尝试恢复音频上下文（如果它处于暂停状态）
+    if (this.audioContext.state === 'suspended') {
+      console.log('尝试恢复音频上下文...')
+      this.audioContext.resume().then(() => {
+        console.log('音频上下文已恢复，重新尝试播放背景音乐')
+        this.audioEnabled = true
+        // 递归调用以重新尝试播放
+        this.playBackgroundMusic(audioPath)
+      }).catch(error => {
+        console.error('恢复音频上下文失败:', error)
+      })
+      return
+    }
+    
+    if (!this.masterGain || !this.audioEnabled) {
+      console.warn('音频系统未完全准备好，无法播放背景音乐')
+      return
+    }
+    
+    // 如果已经在播放背景音乐，先停止
+    this.stopBackgroundMusic()
+    
+    // 创建一个新的增益节点用于控制背景音乐音量
+    this.backgroundMusicGain = this.audioContext.createGain()
+    this.backgroundMusicGain.gain.value = 0.3 // 设置背景音乐音量
+    this.backgroundMusicGain.connect(this.masterGain)
+    
+    // 检查路径是否合法
+    if (!audioPath || audioPath.trim() === '') {
+      console.error('无效的音频路径')
+      return
+    }
+    
+    console.log('开始加载背景音乐:', audioPath)
+    
+    // 加载音频文件
+    fetch(audioPath)
+      .then(response => {
+        if (!response.ok) {
+          throw new Error(`无法加载音频文件: ${response.status} ${response.statusText}`)
+        }
+        console.log('音频文件请求成功，开始处理数据')
+        return response.arrayBuffer()
+      })
+      .then(arrayBuffer => {
+        if (!this.audioContext) {
+          throw new Error('音频上下文不可用')
+        }
+        console.log('音频数据已加载，开始解码')
+        
+        // 解码音频数据
+        return this.audioContext.decodeAudioData(arrayBuffer)
+      })
+      .then(audioBuffer => {
+        if (!this.audioContext || !this.backgroundMusicGain || !audioBuffer) {
+          throw new Error('音频系统组件不可用')
+        }
+        
+        console.log('音频解码成功，开始播放')
+        
+        // 创建音频源
+        this.backgroundMusicSource = this.audioContext.createBufferSource()
+        this.backgroundMusicSource.buffer = audioBuffer
+        this.backgroundMusicSource.loop = true // 循环播放
+        
+        // 连接节点
+        this.backgroundMusicSource.connect(this.backgroundMusicGain)
+        
+        // 开始播放
+        this.backgroundMusicSource.start()
+        this.isBackgroundMusicPlaying = true
+        
+        console.log('背景音乐开始播放:', audioPath)
+      })
+      .catch(error => {
+        console.error('播放背景音乐时出错:', error.message || error)
+        // 尝试播放备用方式
+        this.playBackupBackgroundMusic()
+      })
+  }
+  
+  // 使用备用方式播放背景音乐（例如使用HTML5音频元素）
+  private playBackupBackgroundMusic(): void {
+    console.log('尝试使用备用方式播放背景音乐')
+    try {
+      // 创建一个HTML5音频元素
+      const audioElement = document.createElement('audio')
+      audioElement.src = 'src/assets/sounds/love.mp3'
+      audioElement.loop = true
+      audioElement.volume = 0.3
+      audioElement.id = 'background-music'
+      
+      // 移除可能存在的旧元素
+      const oldAudio = document.getElementById('background-music')
+      if (oldAudio) {
+        document.body.removeChild(oldAudio)
+      }
+      
+      // 添加到文档中
+      document.body.appendChild(audioElement)
+      
+      // 播放
+      const playPromise = audioElement.play()
+      if (playPromise) {
+        playPromise.catch(error => {
+          console.error('备用背景音乐播放失败:', error)
+        })
+      }
+    } catch (error) {
+      console.error('创建备用背景音乐失败:', error)
+    }
+  }
+  
+  // 停止背景音乐
+  public stopBackgroundMusic(): void {
+    // 停止Web Audio API的背景音乐
+    if (this.backgroundMusicSource && this.isBackgroundMusicPlaying) {
+      try {
+        this.backgroundMusicSource.stop()
+      } catch (error) {
+        console.warn('停止Web Audio背景音乐时出错:', error)
+      }
+      
+      this.backgroundMusicSource = null
+      this.isBackgroundMusicPlaying = false
+      console.log('Web Audio背景音乐已停止')
+    }
+    
+    // 同时停止备用HTML5音频元素
+    try {
+      const backupAudio = document.getElementById('background-music') as HTMLAudioElement
+      if (backupAudio) {
+        backupAudio.pause()
+        backupAudio.currentTime = 0
+        backupAudio.parentNode?.removeChild(backupAudio)
+        console.log('HTML5备用背景音乐已停止')
+      }
+    } catch (error) {
+      console.warn('停止HTML5备用背景音乐时出错:', error)
+    }
   }
 } 
